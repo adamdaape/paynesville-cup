@@ -747,19 +747,8 @@ body {
         border-radius: 8px;
     }
 
-    /* Lifetime table: hide year columns + tourneys entered + years played */
-    #main-data-table th:nth-child(4),
-    #main-data-table td:nth-child(4),
-    #main-data-table th:nth-child(5),
-    #main-data-table td:nth-child(5),
-    #main-data-table th:nth-child(7),
-    #main-data-table td:nth-child(7),
-    #main-data-table th:nth-child(8),
-    #main-data-table td:nth-child(8),
-    #main-data-table th:nth-child(9),
-    #main-data-table td:nth-child(9),
-    #main-data-table th:nth-child(10),
-    #main-data-table td:nth-child(10) {
+    /* Hide desktop-only columns (e.g. verbose scouting report) */
+    .desktop-only {
         display: none;
     }
 
@@ -944,15 +933,6 @@ body {
         font-size: 0.82rem;
     }
 
-    /* ----- Vegas Odds table: keep rank + player + odds, hide scouting ----- */
-    /* Column order: rank(1) player(2) prob(3) odds(4) scouting(5) */
-    /* Hide scouting report on mobile — too much text */
-    /* We can't target dynamically by tab, so odds table columns are handled via data table rules above */
-    /* Override: show all columns for odds (only 5 cols, manageable) */
-    #main-data-table th:nth-child(5),
-    #main-data-table td:nth-child(5) {
-        display: none; /* hide scouting report column */
-    }
 
     /* ----- Tournament highlights section: smaller text ----- */
     #tournament-highlights-container {

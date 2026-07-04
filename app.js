@@ -236,16 +236,16 @@ function renderLifetimeTable() {
     let html = `
         <thead>
             <tr>
-                <th style="width: 70px; cursor: pointer;" onclick="setLifetimeSort('LifetimeCupPoints')" title="Rank based on total accumulated Cup points.">Rank</th>
-                <th style="cursor: pointer;" onclick="setLifetimeSort('PlayerName')" title="Player Name. Click to sort alphabetically.">Player Name ${getSortIndicator('PlayerName', sortKey, sortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setLifetimeSort('LifetimeCupPoints')" title="Total aggregate Cup Points earned across all years (sum of each year's top 4 tournament scores). Click to sort.">Lifetime Points ${getSortIndicator('LifetimeCupPoints', sortKey, sortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setLifetimeSort('TotalTournamentsEntered')" title="Total individual tournament entries across all active years. Click to sort.">Tourneys Entered ${getSortIndicator('TotalTournamentsEntered', sortKey, sortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('YearsCompeted')" title="Total number of years with active tournament entries. Click to sort.">Years Played ${getSortIndicator('YearsCompeted', sortKey, sortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setLifetimeSort('AverageCupScore')" title="Average Cup points scored per active year. Click to sort.">Avg Cup Score ${getSortIndicator('AverageCupScore', sortKey, sortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2022')" title="Cup points scored in the 2022 tournament. Click to sort.">2022 ${getSortIndicator('2022', sortKey, sortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2023')" title="Cup points scored in the 2023 tournament. Click to sort.">2023 ${getSortIndicator('2023', sortKey, sortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2024')" title="Cup points scored in the 2024 tournament. Click to sort.">2024 ${getSortIndicator('2024', sortKey, sortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2025')" title="Cup points scored in the 2025 tournament. Click to sort.">2025 ${getSortIndicator('2025', sortKey, sortAscending)}</th>
+                <th style="width: 52px; cursor: pointer;" onclick="setLifetimeSort('LifetimeCupPoints')" title="Rank">Rank</th>
+                <th style="cursor: pointer; min-width: 120px;" onclick="setLifetimeSort('PlayerName')" title="Player Name">Player ${getSortIndicator('PlayerName', sortKey, sortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setLifetimeSort('LifetimeCupPoints')" title="Lifetime Cup Points">Pts ${getSortIndicator('LifetimeCupPoints', sortKey, sortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setLifetimeSort('AverageCupScore')" title="Average Cup Score per year">Avg ${getSortIndicator('AverageCupScore', sortKey, sortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setLifetimeSort('TotalTournamentsEntered')" title="Total Tournaments Entered"># Entries ${getSortIndicator('TotalTournamentsEntered', sortKey, sortAscending)}</th>
+                <th style="text-align: center; cursor: pointer; white-space: nowrap;" onclick="setLifetimeSort('YearsCompeted')" title="Years Competed">Yrs ${getSortIndicator('YearsCompeted', sortKey, sortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2022')" title="2022 Cup Score">2022 ${getSortIndicator('2022', sortKey, sortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2023')" title="2023 Cup Score">2023 ${getSortIndicator('2023', sortKey, sortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2024')" title="2024 Cup Score">2024 ${getSortIndicator('2024', sortKey, sortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2025')" title="2025 Cup Score">2025 ${getSortIndicator('2025', sortKey, sortAscending)}</th>
             </tr>
         </thead>
         <tbody>
@@ -338,12 +338,12 @@ function renderYearlyTable() {
     let html = `
         <thead>
             <tr>
-                <th style="width: 70px; cursor: pointer;" onclick="setYearlySort('Place')" title="Overall placement rank. Handles ties (e.g. 'T2') perfectly in numerical order. Click to sort.">Place ${getSortIndicator('Place', yearlySortKey, yearlySortAscending)}</th>
-                <th style="cursor: pointer;" onclick="setYearlySort('Name')" title="Competitor Name. Click to sort alphabetically.">Player Name ${getSortIndicator('Name', yearlySortKey, yearlySortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setYearlySort('Cup Points')" title="Paynesville Cup points. Sum of the player's top 4 tournament scores. Click to sort.">Cup Points (Top-4) ${getSortIndicator('Cup Points', yearlySortKey, yearlySortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setYearlySort('Tournaments Entered')" title="Total individual tournaments played in this specific year. Click to sort.">Tournaments Entered ${getSortIndicator('Tournaments Entered', yearlySortKey, yearlySortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setYearlySort('Total Score')" title="Uncapped sum of all points scored across all events this year. Click to sort.">Total Uncapped Score ${getSortIndicator('Total Score', yearlySortKey, yearlySortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setYearlySort('Average Score')" title="Average points scored per tournament entered this year. Click to sort.">Average Event Score ${getSortIndicator('Average Score', yearlySortKey, yearlySortAscending)}</th>
+                <th style="width: 52px; cursor: pointer;" onclick="setYearlySort('Place')" title="Overall placement rank.">Place ${getSortIndicator('Place', yearlySortKey, yearlySortAscending)}</th>
+                <th style="cursor: pointer; min-width: 120px;" onclick="setYearlySort('Name')" title="Competitor Name.">Player ${getSortIndicator('Name', yearlySortKey, yearlySortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setYearlySort('Cup Points')" title="Top-4 tournament Cup Points.">Pts (Top 4) ${getSortIndicator('Cup Points', yearlySortKey, yearlySortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setYearlySort('Average Score')" title="Average points per tournament.">Avg ${getSortIndicator('Average Score', yearlySortKey, yearlySortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setYearlySort('Tournaments Entered')" title="Total tournaments played.">Entries ${getSortIndicator('Tournaments Entered', yearlySortKey, yearlySortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setYearlySort('Total Score')" title="Total uncapped score.">Total ${getSortIndicator('Total Score', yearlySortKey, yearlySortAscending)}</th>
             </tr>
         </thead>
         <tbody>
@@ -532,14 +532,14 @@ function renderTournamentTable() {
     let html = `
         <thead>
             <tr>
-                <th style="width: 70px;">Rank</th>
-                <th style="cursor: pointer;" onclick="setTournamentSort('Name')">Player Name ${getSortIndicator('Name', tournamentSortKey, tournamentSortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setTournamentSort('Average Score')">Average Points ${getSortIndicator('Average Score', tournamentSortKey, tournamentSortAscending)}</th>
-                <th style="text-align: right; cursor: pointer;" onclick="setTournamentSort('Total Points')">Total Points ${getSortIndicator('Total Points', tournamentSortKey, tournamentSortAscending)}</th>
+                <th style="width: 52px;">Rank</th>
+                <th style="cursor: pointer; min-width: 120px;" onclick="setTournamentSort('Name')">Player ${getSortIndicator('Name', tournamentSortKey, tournamentSortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setTournamentSort('Average Score')">Avg Pts ${getSortIndicator('Average Score', tournamentSortKey, tournamentSortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setTournamentSort('Total Points')">Total ${getSortIndicator('Total Points', tournamentSortKey, tournamentSortAscending)}</th>
                 <th style="text-align: right; cursor: pointer;" onclick="setTournamentSort('Entries')">Entries ${getSortIndicator('Entries', tournamentSortKey, tournamentSortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setTournamentSort('Gold')">🥇 Gold ${getSortIndicator('Gold', tournamentSortKey, tournamentSortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setTournamentSort('Silver')">🥈 Silver ${getSortIndicator('Silver', tournamentSortKey, tournamentSortAscending)}</th>
-                <th style="text-align: center; cursor: pointer;" onclick="setTournamentSort('Bronze')">🥉 Bronze ${getSortIndicator('Bronze', tournamentSortKey, tournamentSortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setTournamentSort('Gold')">🥇 ${getSortIndicator('Gold', tournamentSortKey, tournamentSortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setTournamentSort('Silver')">🥈 ${getSortIndicator('Silver', tournamentSortKey, tournamentSortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setTournamentSort('Bronze')">🥉 ${getSortIndicator('Bronze', tournamentSortKey, tournamentSortAscending)}</th>
             </tr>
         </thead>
         <tbody>
@@ -600,11 +600,11 @@ function renderOddsTable() {
     let html = `
         <thead>
             <tr>
-                <th style="width: 70px;">Rank</th>
-                <th>Competitor</th>
-                <th>Win Probability</th>
-                <th style="text-align: right;">Vegas American Odds</th>
-                <th>Odds Rating & scouting profile</th>
+                <th style="width: 52px;">Rank</th>
+                <th style="min-width: 120px;">Player</th>
+                <th style="white-space: nowrap;">Win %</th>
+                <th style="text-align: right; white-space: nowrap;">Odds</th>
+                <th class="desktop-only">Scouting Report</th>
             </tr>
         </thead>
         <tbody>

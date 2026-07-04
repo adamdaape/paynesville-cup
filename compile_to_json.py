@@ -60,10 +60,18 @@ def safe_float(val):
     except ValueError:
         return 0.0
 
-# Blacklist metadata
+# Blacklist metadata rows & spreadsheet annotation notes
 BLACKLIST_NAMES = {
     'KEY', 'Active Score', 'Inactive Score', 'No Participation', 'Booby Prize', 'nan', '', 'None'
 }
+
+def is_valid_player(name):
+    """Returns False for spreadsheet metadata/note rows that aren't real players."""
+    if not name or name in BLACKLIST_NAMES:
+        return False
+    if name.lower().startswith('note'):
+        return False
+    return True
 
 granular_entries = []
 yearly_standings = []
@@ -85,7 +93,8 @@ for f in excel_files:
         df_st = df_st[df_st['Name'].notna()]
         df_st = df_st[df_st['Name'].apply(lambda x: isinstance(x, str))]
         df_st['Name_clean'] = df_st['Name'].apply(clean_player_name)
-        df_st = df_st[~df_st['Name_clean'].isin(BLACKLIST_NAMES)]
+        df_st = df_st[df_st['Name_clean'].apply(is_valid_player)]
+
         
         for idx, row in df_st.iterrows():
             name = row['Name_clean']
@@ -121,7 +130,8 @@ for f in excel_files:
         df_ev = df_ev[df_ev['Name'].notna()]
         df_ev = df_ev[df_ev['Name'].apply(lambda x: isinstance(x, str))]
         df_ev['Name_clean'] = df_ev['Name'].apply(clean_player_name)
-        df_ev = df_ev[~df_ev['Name_clean'].isin(BLACKLIST_NAMES)]
+        df_ev = df_ev[df_ev['Name_clean'].apply(is_valid_player)]
+
         
         pts_col = None
         for c in ['PC Points', 'PC POINTS', 'Points', 'POINTS', 'PC Pt', 'PC Pts']:
