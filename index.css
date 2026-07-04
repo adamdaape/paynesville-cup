@@ -809,9 +809,14 @@ body {
     }
 
     .widgets-area {
-        order: -1; /* appears first on mobile */
+        display: flex;
+        flex-direction: column;
         gap: 0.875rem;
     }
+
+    /* Quick Stats above Facebook generator on mobile */
+    #fun-stats-widget-card { order: 1; }
+    #facebook-widget-card  { order: 2; }
 
     .widget-card {
         padding: 1rem 0.875rem;
