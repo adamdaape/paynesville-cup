@@ -153,6 +153,34 @@ Read the live leaderboards, bubble watches, and matchups here:
         </div>
     </div>
 
+    <!-- Mobile Bottom Navigation Bar (hidden on desktop via CSS) -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+        <button class="mobile-nav-btn active" id="mobile-btn-lifetime" onclick="switchTab('lifetime')">
+            <span class="mobile-nav-icon">📈</span>
+            <span class="mobile-nav-label">Standings</span>
+        </button>
+        <button class="mobile-nav-btn" id="mobile-btn-yearly" onclick="switchTab('yearly')">
+            <span class="mobile-nav-icon">📅</span>
+            <span class="mobile-nav-label">Yearly</span>
+        </button>
+        <button class="mobile-nav-btn" id="mobile-btn-odds" onclick="switchTab('odds')">
+            <span class="mobile-nav-icon">🎲</span>
+            <span class="mobile-nav-label">Odds</span>
+        </button>
+        <button class="mobile-nav-btn" id="mobile-btn-bubble" onclick="switchTab('bubble')">
+            <span class="mobile-nav-icon">🎈</span>
+            <span class="mobile-nav-label">Bubble</span>
+        </button>
+        <button class="mobile-nav-btn" id="mobile-btn-tournaments" onclick="switchTab('tournaments')">
+            <span class="mobile-nav-icon">🏆</span>
+            <span class="mobile-nav-label">Events</span>
+        </button>
+        <button class="mobile-nav-btn" id="mobile-btn-rivalry" onclick="switchTab('rivalry')">
+            <span class="mobile-nav-icon">🥊</span>
+            <span class="mobile-nav-label">Rivalry</span>
+        </button>
+    </nav>
+
     <!-- Script -->
     <script src="app.js"></script>
 </body>

@@ -82,8 +82,15 @@ function populateMetadata() {
 function switchTab(tabName) {
     currentTab = tabName;
     
+    // Update desktop sidebar nav
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`btn-${tabName}`).classList.add('active');
+    const sidebarBtn = document.getElementById(`btn-${tabName}`);
+    if (sidebarBtn) sidebarBtn.classList.add('active');
+
+    // Update mobile bottom nav
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.remove('active'));
+    const mobileBtn = document.getElementById(`mobile-btn-${tabName}`);
+    if (mobileBtn) mobileBtn.classList.add('active');
     
     const searchBar = document.getElementById('search-input');
     searchBar.value = '';

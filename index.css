@@ -598,7 +598,9 @@ body {
     font-weight: 700;
 }
 
-/* 📱 Responsive Adjustments */
+/* =====================================================
+   📱 TABLET BREAKPOINT (1024px and below)
+   ===================================================== */
 @media (max-width: 1024px) {
     .dashboard-grid {
         grid-template-columns: 1fr;
@@ -611,13 +613,15 @@ body {
         border-right: none;
         border-bottom: 1px solid var(--border-color);
         padding: 1.5rem;
-        margin-bottom: 1rem;
     }
     .nav-menu {
         flex-direction: row;
         overflow-x: auto;
         padding-bottom: 0.5rem;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
     }
+    .nav-menu::-webkit-scrollbar { display: none; }
     .nav-item {
         flex-shrink: 0;
         padding: 0.75rem 1rem;
@@ -626,6 +630,456 @@ body {
         padding: 1.5rem;
     }
 }
+
+/* =====================================================
+   📱 MOBILE BOTTOM NAV (hidden on desktop)
+   ===================================================== */
+.mobile-bottom-nav {
+    display: none; /* hidden by default, shown on mobile */
+}
+
+/* =====================================================
+   📱 PHONE BREAKPOINT (767px and below)
+   ===================================================== */
+@media (max-width: 767px) {
+
+    /* ----- Hide the desktop sidebar entirely ----- */
+    .sidebar {
+        display: none;
+    }
+
+    /* ----- Main content fills the screen ----- */
+    .app-container {
+        flex-direction: column;
+    }
+
+    .main-content {
+        padding: 1rem 0.875rem;
+        padding-bottom: 90px; /* clearance for the bottom nav */
+        gap: 1rem;
+    }
+
+    /* ----- Header: stack vertically, shrink title ----- */
+    .main-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding-bottom: 1rem;
+    }
+
+    .header-title {
+        width: 100%;
+    }
+
+    #page-title {
+        font-size: 1.4rem;
+        letter-spacing: -0.3px;
+        white-space: normal;
+    }
+
+    .subtitle {
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
+        line-height: 1.4;
+    }
+
+    .header-actions {
+        width: 100%;
+    }
+
+    #search-input {
+        width: 100%;
+        font-size: 0.9rem;
+        padding: 0.65rem 1rem;
+    }
+
+    /* ----- Dashboard grid: single column ----- */
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    /* ----- Cards: tighter padding on mobile ----- */
+    .card {
+        padding: 1rem 0.875rem;
+        border-radius: 12px;
+    }
+
+    .main-data-card {
+        gap: 0.75rem;
+        min-height: unset;
+    }
+
+    .card-header {
+        padding-bottom: 0.875rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .card-header h2 {
+        font-size: 1.1rem;
+    }
+
+    /* ----- Year/Tournament filter buttons: bigger tap targets ----- */
+    .tab-filters {
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        padding: 0.3rem;
+    }
+
+    .filter-btn {
+        padding: 0.6rem 0.875rem;
+        font-size: 0.8rem;
+        min-height: 40px;
+        min-width: 52px;
+    }
+
+    .dropdown-select {
+        font-size: 0.85rem;
+        padding: 0.65rem 0.75rem;
+    }
+
+    /* ----- Data Table: mobile-card style ----- */
+    /* We hide lower-priority columns on phones */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 8px;
+    }
+
+    /* Lifetime table: hide year columns + tourneys entered + years played */
+    #main-data-table th:nth-child(4),
+    #main-data-table td:nth-child(4),
+    #main-data-table th:nth-child(5),
+    #main-data-table td:nth-child(5),
+    #main-data-table th:nth-child(7),
+    #main-data-table td:nth-child(7),
+    #main-data-table th:nth-child(8),
+    #main-data-table td:nth-child(8),
+    #main-data-table th:nth-child(9),
+    #main-data-table td:nth-child(9),
+    #main-data-table th:nth-child(10),
+    #main-data-table td:nth-child(10) {
+        display: none;
+    }
+
+    .data-table {
+        font-size: 0.88rem;
+    }
+
+    .data-table th {
+        padding: 0.75rem 0.6rem;
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+
+    .data-table td {
+        padding: 0.875rem 0.6rem;
+    }
+
+    /* Make rows feel like cards with a subtle left border */
+    .data-table tbody tr {
+        border-left: 3px solid transparent;
+        transition: border-color 0.2s;
+    }
+
+    .data-table tbody tr:hover {
+        border-left-color: var(--accent-cyan);
+        background-color: hsla(222, 20%, 25%, 0.2);
+    }
+
+    /* Rank badge tighter */
+    .rank-badge {
+        width: 26px;
+        height: 26px;
+        font-size: 0.78rem;
+    }
+
+    /* Medal icons tighter */
+    .medal-icon {
+        padding: 0.25rem 0.4rem;
+        font-size: 0.78rem;
+    }
+
+    /* ----- Widgets: appear ABOVE content (reordered) ----- */
+    /* Move widgets-area visually above main-data-card */
+    .dashboard-grid {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .widgets-area {
+        order: -1; /* appears first on mobile */
+        gap: 0.875rem;
+    }
+
+    .widget-card {
+        padding: 1rem 0.875rem;
+    }
+
+    .widget-card h3 {
+        font-size: 0.95rem;
+    }
+
+    .widget-body {
+        gap: 0.75rem;
+        margin-top: 0.875rem;
+        font-size: 0.82rem;
+    }
+
+    .fb-textarea {
+        height: 110px;
+        font-size: 0.78rem;
+    }
+
+    .action-btn {
+        padding: 0.7rem;
+        font-size: 0.9rem;
+        min-height: 44px;
+    }
+
+    .stat-row {
+        padding: 0.45rem 0;
+    }
+
+    .stat-label {
+        font-size: 0.82rem;
+    }
+
+    .stat-value {
+        font-size: 0.9rem;
+    }
+
+    /* ----- Player Card Modal: full-screen slide-up on mobile ----- */
+    .modal-overlay {
+        align-items: flex-end; /* slide up from bottom */
+        padding: 0;
+    }
+
+    .player-card {
+        width: 100%;
+        min-height: unset;
+        max-height: 92vh;
+        border-radius: 20px 20px 0 0;
+        padding: 1.5rem 1.25rem;
+        transform: translateY(100%); /* start off-screen below */
+        overflow-y: auto;
+    }
+
+    .modal-overlay.active .player-card {
+        transform: translateY(0);
+    }
+
+    .card-name {
+        font-size: 1.4rem;
+    }
+
+    .card-nickname {
+        font-size: 0.85rem;
+    }
+
+    .sports-stats-grid {
+        grid-template-columns: repeat(2, 1fr); /* 2-col instead of 4-col */
+        gap: 0;
+    }
+
+    .sports-stat-col:nth-child(2) {
+        border-right: 1px dashed var(--border-color);
+    }
+
+    .sports-stat-col:nth-child(3) {
+        border-top: 1px dashed var(--border-color);
+    }
+
+    .sports-stat-col:nth-child(4) {
+        border-top: 1px dashed var(--border-color);
+        border-right: none;
+    }
+
+    .sports-stat-col {
+        padding: 0.5rem 0;
+    }
+
+    /* Medal card modal also full-screen */
+    .player-card.medal-card {
+        min-height: unset;
+        max-height: 80vh;
+    }
+
+    /* ----- Rivalry screen: stack vertically ----- */
+    .rivalry-selectors {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .rivalry-vs {
+        text-align: center;
+        font-size: 1rem;
+        padding: 0.25rem 0;
+    }
+
+    .rivalry-stats-grid {
+        grid-template-columns: 1fr 100px 1fr;
+        gap: 0.5rem;
+    }
+
+    .rivalry-row-metric {
+        font-size: 0.75rem;
+        padding: 0.4rem;
+    }
+
+    .rivalry-player-val {
+        font-size: 0.95rem;
+    }
+
+    .rivalry-record-item {
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.6rem 0.75rem;
+        font-size: 0.82rem;
+    }
+
+    /* ----- Vegas Odds table: keep rank + player + odds, hide scouting ----- */
+    /* Column order: rank(1) player(2) prob(3) odds(4) scouting(5) */
+    /* Hide scouting report on mobile — too much text */
+    /* We can't target dynamically by tab, so odds table columns are handled via data table rules above */
+    /* Override: show all columns for odds (only 5 cols, manageable) */
+    #main-data-table th:nth-child(5),
+    #main-data-table td:nth-child(5) {
+        display: none; /* hide scouting report column */
+    }
+
+    /* ----- Tournament highlights section: smaller text ----- */
+    #tournament-highlights-container {
+        padding: 0 0.875rem 1rem 0.875rem !important;
+        font-size: 0.85rem;
+    }
+
+    /* ----- Bubble watch: tighter spacing ----- */
+    .bubble-row {
+        margin-bottom: 1rem;
+        padding-left: 0.75rem;
+    }
+
+    .bubble-player-info {
+        font-size: 0.9rem;
+    }
+
+    /* ----- Odds progress bars ----- */
+    .odds-info {
+        font-size: 0.85rem;
+    }
+
+    /* ----- Bottom Mobile Navigation Bar ----- */
+    .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background-color: var(--bg-sidebar);
+        border-top: 1px solid var(--border-color);
+        z-index: 500;
+        padding-bottom: env(safe-area-inset-bottom, 0px); /* iOS notch support */
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .mobile-nav-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.4rem 0.2rem;
+        transition: all 0.2s ease;
+        color: var(--text-secondary);
+        min-height: 44px;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-nav-btn.active {
+        color: var(--accent-cyan);
+    }
+
+    .mobile-nav-btn.active .mobile-nav-icon {
+        transform: scale(1.15);
+        filter: drop-shadow(0 0 6px hsla(180, 100%, 48%, 0.6));
+    }
+
+    .mobile-nav-icon {
+        font-size: 1.3rem;
+        line-height: 1;
+        transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    .mobile-nav-label {
+        font-size: 0.6rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        line-height: 1;
+        transition: color 0.2s ease;
+    }
+
+    .mobile-nav-btn:active {
+        background-color: hsla(222, 20%, 20%, 0.5);
+        border-radius: 8px;
+    }
+
+    /* ----- Loading state skeleton pulse ----- */
+    .skeleton-row td {
+        background: linear-gradient(90deg,
+            hsla(222, 20%, 20%, 0.4) 0%,
+            hsla(222, 20%, 30%, 0.4) 50%,
+            hsla(222, 20%, 20%, 0.4) 100%);
+        background-size: 200% 100%;
+        animation: skeleton-pulse 1.4s ease-in-out infinite;
+        border-radius: 4px;
+        color: transparent !important;
+        user-select: none;
+    }
+
+    @keyframes skeleton-pulse {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* Grades container scrolls better on mobile */
+    .grades-container {
+        max-height: 200px;
+    }
+
+    /* Card tab buttons: bigger tap area */
+    .card-tab-btn {
+        min-height: 40px;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.78rem;
+    }
+}
+
+/* =====================================================
+   📱 VERY SMALL PHONES (360px and below)
+   ===================================================== */
+@media (max-width: 360px) {
+    .mobile-nav-label {
+        display: none; /* just icons on very tiny screens */
+    }
+    .mobile-bottom-nav {
+        height: 52px;
+    }
+    .mobile-nav-icon {
+        font-size: 1.4rem;
+    }
+    .main-content {
+        padding-bottom: 70px;
+    }
+}
+
 
 /* 🎴 Baseball Player Card Modal Overlay */
 .modal-overlay {
