@@ -271,9 +271,9 @@ function renderLifetimeTable() {
                     <td style="text-align: center;"><span class="rank-badge ${badgeClass}">${originalRank}</span></td>
                     <td style="font-weight: 600; color: var(--text-primary); cursor: pointer;" onclick="showPlayerCard('${p.PlayerName}')">${p.PlayerName}${trophyIcon}</td>
                     <td style="text-align: right; font-weight: 700; color: var(--accent-gold);">${p.LifetimeCupPoints.toFixed(1)}</td>
+                    <td style="text-align: right; color: var(--accent-cyan); font-weight: 600;">${p.AverageCupScore.toFixed(1)}</td>
                     <td style="text-align: right;">${p.TotalTournamentsEntered}</td>
                     <td style="text-align: center;">${p.YearsCompeted}</td>
-                    <td style="text-align: right; color: var(--accent-cyan); font-weight: 600;">${p.AverageCupScore.toFixed(1)}</td>
                     <td style="text-align: center; opacity: ${p['2022'] !== null ? 1 : 0.4};">${cell2022}</td>
                     <td style="text-align: center; opacity: ${p['2023'] !== null ? 1 : 0.4};">${cell2023}</td>
                     <td style="text-align: center; opacity: ${p['2024'] !== null ? 1 : 0.4};">${cell2024}</td>
@@ -366,9 +366,9 @@ function renderYearlyTable() {
                     <td style="text-align: center;"><span class="rank-badge ${badgeClass}">${place}</span></td>
                     <td style="font-weight: 600; color: var(--text-primary);" onclick="showPlayerCard('${p.Name}')">${p.Name}</td>
                     <td style="text-align: right; font-weight: 700; color: var(--accent-gold);">${p['Cup Points'].toFixed(1)}</td>
+                    <td style="text-align: right; color: var(--accent-cyan); font-weight: 600;">${p['Average Score'].toFixed(1)}</td>
                     <td style="text-align: right;">${p['Tournaments Entered']}</td>
                     <td style="text-align: right;">${p['Total Score'].toFixed(1)}</td>
-                    <td style="text-align: right; color: var(--accent-cyan); font-weight: 600;">${p['Average Score'].toFixed(1)}</td>
                 </tr>
             `;
         });
