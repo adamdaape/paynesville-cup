@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Official Paynesville Cup Historical Standings, Live 2026 Odds Simulation, Cousin Rivalry Tracker, and Roster Analysis.">
+    <title>🏆 Paynesville Cup Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <span class="cup-icon">🏆</span>
+                <span class="brand-text">Paynesville Cup</span>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-item active" id="btn-lifetime" onclick="switchTab('lifetime')">📈 Lifetime Standings</button>
+                <button class="nav-item" id="btn-yearly" onclick="switchTab('yearly')">📅 Yearly Standings</button>
+                <button class="nav-item" id="btn-odds" onclick="switchTab('odds')">🎲 Vegas Live Odds</button>
+                <button class="nav-item" id="btn-bubble" onclick="switchTab('bubble')">🎈 Bubble Watch</button>
+                <button class="nav-item" id="btn-tournaments" onclick="switchTab('tournaments')">🏆 Tournaments</button>
+                <button class="nav-item" id="btn-rivalry" onclick="switchTab('rivalry')">🥊 Cousin Rivalry</button>
+            </nav>
+            <div class="sidebar-footer">
+                <p>Paynesville Cup Dashboard v2026.1</p>
+                <p>Created with Antigravity AI 🚀</p>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div class="header-title">
+                    <h1 id="page-title">Paynesville Cup Master Roster</h1>
+                    <p class="subtitle" id="page-subtitle">Historical results, active streaks, and player statistics across 2022-2025.</p>
+                </div>
+                <div class="header-actions">
+                    <input type="text" id="search-input" placeholder="🔍 Search players..." oninput="handleSearch()">
+                </div>
+            </header>
+
+            <!-- Dashboard Grid Container -->
+            <div class="dashboard-grid">
+                
+                <!-- Main Tab Contents -->
+                <section class="card main-data-card" id="tab-data-section">
+                    <!-- Dynamic headers inside table card -->
+                    <div class="card-header" id="data-card-header">
+                        <h2 id="table-card-title">Lifetime Leaderboard</h2>
+                        <div class="tab-filters" id="yearly-filter-container" style="display: none;">
+                            <button class="filter-btn active" onclick="filterYear(2025)">2025</button>
+                            <button class="filter-btn" onclick="filterYear(2024)">2024</button>
+                            <button class="filter-btn" onclick="filterYear(2023)">2023</button>
+                            <button class="filter-btn" onclick="filterYear(2022)">2022</button>
+                        </div>
+                        <div class="tab-filters" id="tournament-filter-container" style="display: none;">
+                            <select id="tournament-select" class="dropdown-select" onchange="filterTournament(this.value)" style="margin-left: auto;">
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Tournament Highlights -->
+                    <div id="tournament-highlights-container" style="display: none; padding: 0 2rem 1.5rem 2rem; border-bottom: 1px solid var(--border-color);">
+                        <!-- Dynamically populated -->
+                    </div>
+                    
+                    <!-- Scrollable table container -->
+                    <div class="table-container" id="leaderboard-table-container">
+                        <table class="data-table" id="main-data-table">
+                            <!-- Populated dynamically via app.js -->
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Sidebar Widget Cards -->
+                <section class="widgets-area">
+                    <!-- Facebook Share Widget -->
+                    <article class="card widget-card fb-card" id="facebook-widget-card">
+                        <div class="card-header">
+                            <h3>📱 Facebook Updates Generator</h3>
+                        </div>
+                        <div class="widget-body">
+                            <p>Generate a styled, trash-talk-ready recaps with actual live stats and standings to post on Facebook!</p>
+                            <textarea class="fb-textarea" id="fb-recap-text" readonly>
+📢 PAYNESVILLE CUP DAY RECAP!
+
+Standings are updating live on the Paynesville Cup Dashboard! 
+Adam Murphy is still leading the pack with Pickleball dominance (+1231 odds!). 
+
+Read the live leaderboards, bubble watches, and matchups here: 
+🔗 http://paynesvillecup.com
+                            </textarea>
+                            <button class="action-btn copy-btn" id="btn-copy-fb" onclick="copyRecapToClipboard()">📋 Copy Status to Clipboard</button>
+                        </div>
+                    </article>
+
+                    <!-- Fun facts / Quick Stats Widget -->
+                    <article class="card widget-card stats-card" id="fun-stats-widget-card">
+                        <div class="card-header">
+                            <h3>⚡ Paynesville Cup Quick Stats</h3>
+                        </div>
+                        <div class="widget-body" id="quick-stats-body">
+                            <div class="stat-row">
+                                <span class="stat-label">Total Competitors</span>
+                                <span class="stat-value" id="stat-total-players">93</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Total Tournament Entries</span>
+                                <span class="stat-value" id="stat-total-entries">1,551</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Defending Champion</span>
+                                <span class="stat-value" style="color: var(--accent-gold);">Ben Aeshliman</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Pound-for-Pound Sniper</span>
+                                <span class="stat-value" style="color: var(--accent-cyan);">Jason Lindseth (11.6 pts/t)</span>
+                            </div>
+                        </div>
+                    </article>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Player Card Modal Overlay -->
+    <div class="modal-overlay" id="player-card-modal" onclick="closePlayerCard(event)">
+        <div class="player-card" id="player-card-container" onclick="event.stopPropagation()">
+            <button class="close-card-btn" onclick="closePlayerCard(event)">×</button>
+            <div class="card-glow"></div>
+            <div class="card-inner" id="player-card-inner">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Medal Details Modal Overlay -->
+    <div class="modal-overlay" id="medal-details-modal" onclick="closeMedalDetails(event)">
+        <div class="player-card medal-card" id="medal-details-container" onclick="event.stopPropagation()">
+            <button class="close-card-btn" onclick="closeMedalDetails(event)">×</button>
+            <div class="card-inner" id="medal-details-inner">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="app.js"></script>
+</body>
+</html>
