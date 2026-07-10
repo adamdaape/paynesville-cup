@@ -2068,10 +2068,8 @@ function renderCreateBetForm(container) {
     const names = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
     
     let playerAOptions = '';
-    let playerBOptions = '';
     names.forEach(n => {
         playerAOptions += `<option value="${n}">${n}</option>`;
-        playerBOptions += `<option value="${n}">${n}</option>`;
     });
     
     let tourneyOptions = '';
@@ -2079,26 +2077,96 @@ function renderCreateBetForm(container) {
         tourneyOptions += `<option value="${t}">${t}</option>`;
     });
     
+    let sideACheckboxes = '';
+    let sideBCheckboxes = '';
+    let bulkOpponentCheckboxes = '';
+    
+    names.forEach((n, idx) => {
+        sideACheckboxes += `
+            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
+                <input type="checkbox" class="bet-side-a-check" value="${n}" onchange="evaluateTeamMode()"> ${n}
+            </label>
+        `;
+        sideBCheckboxes += `
+            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
+                <input type="checkbox" class="bet-side-b-check" value="${n}" onchange="evaluateTeamMode()"> ${n}
+            </label>
+        `;
+        bulkOpponentCheckboxes += `
+            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
+                <input type="checkbox" class="bet-bulk-opp-check" value="${n}" onchange="handleBulkOpponentChange()"> ${n}
+            </label>
+        `;
+    });
+    
     let html = `
         <div class="card bet-form-card">
             <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.5rem; margin-bottom: 1.5rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">🎰 Create a Side Bet</h3>
+            
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; background: hsla(222, 20%, 25%, 0.3); padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                <input type="checkbox" id="bet-bulk-mode" onchange="toggleBulkMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                <label for="bet-bulk-mode" style="cursor: pointer; user-select: none; font-weight: 700; color: var(--accent-cyan); font-size: 0.95rem;">🎰 Multiple Opponents (Bulk Mode)</label>
+            </div>
+            
             <form id="create-bet-form" onsubmit="handleCreateBetSubmit(event)">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div class="form-group">
-                        <label for="bet-player-a">Player A *</label>
-                        <select class="form-select" id="bet-player-a" required>
-                            ${playerAOptions}
-                        </select>
+                
+                <div id="normal-mode-fields">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+                        <div class="form-group">
+                            <label>Side A (Winners) *</label>
+                            <div style="max-height: 140px; overflow-y: auto; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 0.25rem;">
+                                ${sideACheckboxes}
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Side B (Losers) *</label>
+                            <div style="max-height: 140px; overflow-y: auto; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 0.25rem;">
+                                ${sideBCheckboxes}
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="bet-player-b">Player B *</label>
-                        <select class="form-select" id="bet-player-b" required>
-                            ${playerBOptions}
-                        </select>
+                    
+                    <div class="form-group" id="split-mode-group" style="display: none; background: hsla(45, 100%, 55%, 0.05); padding: 0.75rem; border-radius: 8px; border: 1px dashed var(--border-color);">
+                        <label style="color: var(--accent-gold); font-weight: 700;">👥 Team Wager Mode</label>
+                        <div style="display: flex; gap: 1.5rem; margin-top: 0.4rem;">
+                            <label style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; cursor: pointer;">
+                                <input type="radio" name="wager-split" value="Per Person" checked> Per Person
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; cursor: pointer;">
+                                <input type="radio" name="wager-split" value="Split"> Total Pot Split
+                            </label>
+                        </div>
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.4rem; display: block; line-height: 1.3;">
+                            * <strong>Per Person</strong>: Losers owe the wager amount to EACH winner.<br>
+                            * <strong>Total Pot Split</strong>: The single wager amount is divided among winners/losers.
+                        </span>
                     </div>
                 </div>
                 
-                <div class="form-group">
+                <div id="bulk-mode-fields" style="display: none; margin-bottom: 1.25rem;">
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label for="bet-player-a">Your Name (Player A) *</label>
+                        <select class="form-select" id="bet-player-a">
+                            ${playerAOptions}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label>Opponents (Select all that apply) *</label>
+                        <div style="max-height: 140px; overflow-y: auto; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 0.25rem;">
+                            ${bulkOpponentCheckboxes}
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" id="bulk-amounts-config" style="display: none; background: hsla(180, 100%, 48%, 0.05); padding: 0.75rem; border-radius: 8px; border: 1px dashed var(--border-color);">
+                        <label style="color: var(--accent-cyan); font-weight: 700;">💰 Configure Wager Amounts</label>
+                        <div id="bulk-amounts-inputs" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-height: 180px; overflow-y: auto; padding-right: 0.25rem;">
+                            <!-- Inputs generated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 1.25rem;">
                     <label for="bet-type">Wager Type *</label>
                     <select class="form-select" id="bet-type" onchange="toggleBetTypeFields(this.value)" required>
                         <option value="Cup">🏆 Paynesville Cup Event</option>
@@ -2119,7 +2187,7 @@ function renderCreateBetForm(container) {
                     <input type="text" class="form-input" id="bet-event-input" placeholder="e.g. Clash Royale, Cornhole, Mini-Golf">
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group" id="group-normal-amount">
                     <label for="bet-amount">Wager Amount ($) *</label>
                     <input type="number" class="form-input" id="bet-amount" min="1" max="10000" placeholder="e.g. 5, 20, 100" required>
                 </div>
@@ -2135,6 +2203,75 @@ function renderCreateBetForm(container) {
         </div>
     `;
     container.innerHTML = html;
+}
+
+function toggleBulkMode(isBulk) {
+    const normalFields = document.getElementById('normal-mode-fields');
+    const bulkFields = document.getElementById('bulk-mode-fields');
+    const normalAmount = document.getElementById('group-normal-amount');
+    const amountInput = document.getElementById('bet-amount');
+    
+    if (isBulk) {
+        if (normalFields) normalFields.style.display = 'none';
+        if (bulkFields) bulkFields.style.display = 'block';
+        if (normalAmount) normalAmount.style.display = 'none';
+        if (amountInput) amountInput.removeAttribute('required');
+        handleBulkOpponentChange();
+    } else {
+        if (normalFields) normalFields.style.display = 'block';
+        if (bulkFields) bulkFields.style.display = 'none';
+        if (normalAmount) normalAmount.style.display = 'flex';
+        if (amountInput) amountInput.setAttribute('required', 'true');
+    }
+}
+
+function evaluateTeamMode() {
+    const sideA = Array.from(document.querySelectorAll('.bet-side-a-check:checked')).map(c => c.value);
+    const sideB = Array.from(document.querySelectorAll('.bet-side-b-check:checked')).map(c => c.value);
+    
+    const splitGroup = document.getElementById('split-mode-group');
+    if (splitGroup) {
+        if (sideA.length > 1 || sideB.length > 1) {
+            splitGroup.style.display = 'block';
+        } else {
+            splitGroup.style.display = 'none';
+        }
+    }
+}
+
+function handleBulkOpponentChange() {
+    const checkedOpponents = Array.from(document.querySelectorAll('.bet-bulk-opp-check:checked')).map(c => c.value);
+    const configGroup = document.getElementById('bulk-amounts-config');
+    const inputsDiv = document.getElementById('bulk-amounts-inputs');
+    
+    if (!configGroup || !inputsDiv) return;
+    
+    if (checkedOpponents.length === 0) {
+        configGroup.style.display = 'none';
+        return;
+    }
+    
+    configGroup.style.display = 'block';
+    
+    const existingValues = {};
+    document.querySelectorAll('.bulk-amount-override').forEach(inp => {
+        existingValues[inp.getAttribute('data-player')] = inp.value;
+    });
+    
+    let html = '';
+    checkedOpponents.forEach(p => {
+        let val = existingValues[p] || '5';
+        html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid var(--border-color);">
+                <span style="font-weight: 600; font-size: 0.9rem;">${p}</span>
+                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                    <span style="color: var(--text-secondary); font-size: 0.9rem;">$</span>
+                    <input type="number" class="form-input bulk-amount-override" data-player="${p}" value="${val}" min="1" max="10000" style="width: 70px; padding: 0.3rem 0.5rem; text-align: center;">
+                </div>
+            </div>
+        `;
+    });
+    inputsDiv.innerHTML = html;
 }
 
 function toggleBetTypeFields(val) {
@@ -2153,10 +2290,10 @@ async function handleCreateBetSubmit(e) {
     e.preventDefault();
     const btn = document.getElementById('btn-submit-bet');
     const status = document.getElementById('bet-submit-status');
+    const isBulk = document.getElementById('bet-bulk-mode').checked;
     
-    const playerA = document.getElementById('bet-player-a').value;
-    const playerB = document.getElementById('bet-player-b').value;
     const type = document.getElementById('bet-type').value;
+    const quote = document.getElementById('bet-quote').value;
     
     let eventName = '';
     if (type === 'Cup') {
@@ -2169,50 +2306,127 @@ async function handleCreateBetSubmit(e) {
         }
     }
     
-    const amount = document.getElementById('bet-amount').value;
-    const quote = document.getElementById('bet-quote').value;
-    
-    if (playerA === playerB) {
-        alert("Player A and Player B must be different people!");
-        return;
-    }
-    
-    btn.disabled = true;
-    btn.innerHTML = '⏳ Submitting Bet...';
-    status.style.display = 'block';
-    status.innerHTML = '<span style="color: var(--text-secondary);">Sending bet to Google Sheet database...</span>';
-    
-    const payload = {
-        action: 'create',
-        playerA,
-        playerB,
-        type,
-        event: eventName,
-        amount,
-        quote
-    };
-    
-    try {
-        await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'text/plain'
-            },
-            body: JSON.stringify(payload)
+    if (isBulk) {
+        const playerA = document.getElementById('bet-player-a').value;
+        const opponents = Array.from(document.querySelectorAll('.bet-bulk-opp-check:checked')).map(c => c.value);
+        
+        if (opponents.length === 0) {
+            alert("Please select at least one opponent.");
+            return;
+        }
+        
+        if (opponents.includes(playerA)) {
+            alert("You cannot bet against yourself! Uncheck your own name from the opponents list.");
+            return;
+        }
+        
+        btn.disabled = true;
+        status.style.display = 'block';
+        
+        const overrides = {};
+        document.querySelectorAll('.bulk-amount-override').forEach(inp => {
+            overrides[inp.getAttribute('data-player')] = parseFloat(inp.value) || 5.0;
         });
+        
+        let successCount = 0;
+        for (let i = 0; i < opponents.length; i++) {
+            const opp = opponents[i];
+            const amount = overrides[opp] || 5.0;
+            
+            status.innerHTML = `<span style="color: var(--text-secondary);">⏳ Logging bet ${i+1} of ${opponents.length} against ${opp}...</span>`;
+            
+            const payload = {
+                action: 'create',
+                playerA: playerA,
+                playerB: opp,
+                type: type,
+                event: eventName,
+                amount: amount,
+                quote: quote
+            };
+            
+            try {
+                await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                successCount++;
+            } catch (err) {
+                console.error(`Failed to submit bet against ${opp}:`, err);
+            }
+        }
         
         delete googleSheetsCache['SIDE_BETS'];
         
-        status.innerHTML = '<span style="color: var(--accent-green); font-weight: 700;">✅ Bet Logged Successfully!</span>';
+        if (successCount === opponents.length) {
+            status.innerHTML = `<span style="color: var(--accent-green); font-weight: 700;">✅ All ${opponents.length} bets logged successfully!</span>`;
+        } else {
+            status.innerHTML = `<span style="color: var(--accent-gold); font-weight: 700;">⚠️ Logged ${successCount} of ${opponents.length} bets. Some failed.</span>`;
+        }
+        
         setTimeout(() => {
             switchBetsSubTab('active');
-        }, 1200);
-    } catch (err) {
-        console.error("Error submitting bet:", err);
-        status.innerHTML = `<span style="color: var(--accent-red);">⚠️ Error: ${err.message}. Please check connection.</span>`;
-        btn.disabled = false;
-        btn.innerHTML = '🎰 Create Side Bet';
+        }, 1500);
+        
+    } else {
+        const sideA = Array.from(document.querySelectorAll('.bet-side-a-check:checked')).map(c => c.value);
+        const sideB = Array.from(document.querySelectorAll('.bet-side-b-check:checked')).map(c => c.value);
+        const amount = document.getElementById('bet-amount').value;
+        
+        if (sideA.length === 0 || sideB.length === 0) {
+            alert("Please select at least one player for Side A and Side B.");
+            return;
+        }
+        
+        const duplicates = sideA.filter(p => sideB.includes(p));
+        if (duplicates.length > 0) {
+            alert(`Player cannot be on both sides: ${duplicates.join(', ')}`);
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Submitting Team Bet...';
+        status.style.display = 'block';
+        status.innerHTML = '<span style="color: var(--text-secondary);">Sending bet to Google Sheet...</span>';
+        
+        let finalType = type;
+        const isSplit = document.querySelector('input[name="wager-split"]:checked')?.value === 'Split';
+        if (isSplit && (sideA.length > 1 || sideB.length > 1)) {
+            finalType = `${type} (Split)`;
+        }
+        
+        const payload = {
+            action: 'create',
+            playerA: sideA.join(', '),
+            playerB: sideB.join(', '),
+            type: finalType,
+            event: eventName,
+            amount: amount,
+            quote: quote
+        };
+        
+        try {
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(payload)
+            });
+            
+            delete googleSheetsCache['SIDE_BETS'];
+            
+            status.innerHTML = '<span style="color: var(--accent-green); font-weight: 700;">✅ Team Bet Logged Successfully!</span>';
+            setTimeout(() => {
+                switchBetsSubTab('active');
+            }, 1200);
+        } catch (err) {
+            console.error("Error submitting team bet:", err);
+            status.innerHTML = `<span style="color: var(--accent-red);">⚠️ Error: ${err.message}. Please check connection.</span>`;
+            btn.disabled = false;
+            btn.innerHTML = '🎰 Create Side Bet';
+        }
     }
 }
 
@@ -2244,20 +2458,41 @@ async function renderHistoryBets(container) {
     // Add up resolved bets earnings
     const resolvedBets = sideBetsData.filter(b => b.winner !== 'Pending');
     resolvedBets.forEach(b => {
-        const pA = b.playerA;
-        const pB = b.playerB;
+        const sideA = b.playerA.split(',').map(n => n.trim()).filter(n => n);
+        const sideB = b.playerB.split(',').map(n => n.trim()).filter(n => n);
         const amount = b.amount;
-        const winner = b.winner;
+        const winnerStr = b.winner.trim();
         
-        if (netEarnings[pA] === undefined) netEarnings[pA] = 0;
-        if (netEarnings[pB] === undefined) netEarnings[pB] = 0;
+        const isSplit = b.type.endsWith('(Split)');
         
-        if (winner === pA) {
-            netEarnings[pA] += amount;
-            netEarnings[pB] -= amount;
-        } else if (winner === pB) {
-            netEarnings[pB] += amount;
-            netEarnings[pA] -= amount;
+        sideA.forEach(p => { if (netEarnings[p] === undefined) netEarnings[p] = 0; });
+        sideB.forEach(p => { if (netEarnings[p] === undefined) netEarnings[p] = 0; });
+        
+        if (winnerStr === 'Tie') return;
+        
+        const sideAWins = (winnerStr === b.playerA.trim() || sideA.includes(winnerStr));
+        const sideBWins = (winnerStr === b.playerB.trim() || sideB.includes(winnerStr));
+        
+        if (sideAWins) {
+            if (isSplit) {
+                const winShare = amount / sideA.length;
+                const loseShare = amount / sideB.length;
+                sideA.forEach(p => netEarnings[p] += winShare);
+                sideB.forEach(p => netEarnings[p] -= loseShare);
+            } else {
+                sideA.forEach(p => netEarnings[p] += amount * sideB.length);
+                sideB.forEach(p => netEarnings[p] -= amount * sideA.length);
+            }
+        } else if (sideBWins) {
+            if (isSplit) {
+                const winShare = amount / sideB.length;
+                const loseShare = amount / sideA.length;
+                sideB.forEach(p => netEarnings[p] += winShare);
+                sideA.forEach(p => netEarnings[p] -= loseShare);
+            } else {
+                sideB.forEach(p => netEarnings[p] += amount * sideA.length);
+                sideA.forEach(p => netEarnings[p] -= amount * sideB.length);
+            }
         }
     });
     
@@ -2265,8 +2500,11 @@ async function renderHistoryBets(container) {
         .map(([name, val]) => ({ name, val }))
         .filter(item => {
             if (item.val !== 0) return true;
-            // keep players who participated in a bet even if their net is 0
-            return sideBetsData.some(b => b.playerA === item.name || b.playerB === item.name);
+            return sideBetsData.some(b => {
+                const sA = b.playerA.split(',').map(n => n.trim());
+                const sB = b.playerB.split(',').map(n => n.trim());
+                return sA.includes(item.name) || sB.includes(item.name);
+            });
         });
         
     leaderboard.sort((a,b) => b.val - a.val);
