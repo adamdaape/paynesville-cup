@@ -1914,7 +1914,7 @@ async function executeBetActionInBackground(payload) {
         await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(payload)
         });
         delete googleSheetsCache['SIDE_BETS'];
@@ -2114,6 +2114,85 @@ function renderCreateBetForm(container) {
     container.innerHTML = html;
 }
 
+function toggleBetTypeFields(val) {
+    const cupGroup = document.getElementById('group-cup-event');
+    const customGroup = document.getElementById('group-custom-event');
+    if (val === 'Cup') {
+        if (cupGroup) cupGroup.style.display = 'flex';
+        if (customGroup) customGroup.style.display = 'none';
+    } else {
+        if (cupGroup) cupGroup.style.display = 'none';
+        if (customGroup) customGroup.style.display = 'flex';
+    }
+}
+
+async function handleCreateBetSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit-bet');
+    const status = document.getElementById('bet-submit-status');
+    
+    const playerA = document.getElementById('bet-player-a').value;
+    const playerB = document.getElementById('bet-player-b').value;
+    const type = document.getElementById('bet-type').value;
+    
+    let eventName = '';
+    if (type === 'Cup') {
+        eventName = document.getElementById('bet-event-select').value;
+    } else {
+        eventName = document.getElementById('bet-event-input').value;
+        if (!eventName.trim()) {
+            alert("Please enter a custom game name.");
+            return;
+        }
+    }
+    
+    const amount = document.getElementById('bet-amount').value;
+    const quote = document.getElementById('bet-quote').value;
+    
+    if (playerA === playerB) {
+        alert("Player A and Player B must be different people!");
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Submitting Bet...';
+    status.style.display = 'block';
+    status.innerHTML = '<span style="color: var(--text-secondary);">Sending bet to Google Sheet database...</span>';
+    
+    const payload = {
+        action: 'create',
+        playerA,
+        playerB,
+        type,
+        event: eventName,
+        amount,
+        quote
+    };
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'text/plain'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        delete googleSheetsCache['SIDE_BETS'];
+        
+        status.innerHTML = '<span style="color: var(--accent-green); font-weight: 700;">✅ Bet Logged Successfully!</span>';
+        setTimeout(() => {
+            switchBetsSubTab('active');
+        }, 1200);
+    } catch (err) {
+        console.error("Error submitting bet:", err);
+        status.innerHTML = `<span style="color: var(--accent-red);">⚠️ Error: ${err.message}. Please check connection.</span>`;
+        btn.disabled = false;
+        btn.innerHTML = '🎰 Create Side Bet';
+    }
+}
+
 // Render Historical Bets and Money Board Leaderboard
 async function renderHistoryBets(container) {
     container.innerHTML = `
@@ -2288,7 +2367,7 @@ async function executeBetAction(payload) {
             method: 'POST',
             mode: 'no-cors',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'text/plain'
             },
             body: JSON.stringify(payload)
         });
