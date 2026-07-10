@@ -1096,6 +1096,100 @@ function renderRivalryComparison() {
     
     if (!p1 || !p2) return;
     
+    // Compute Direct Wagers Stats
+    let p1NetWinningsVsP2 = 0;
+    let p1WagerWins = 0;
+    let p2WagerWins = 0;
+    let activeWagersCount = 0;
+    let directWagersListHtml = '';
+    
+    const mutualWagers = sideBetsData.filter(b => {
+        const sideA = b.playerA.split(',').map(n => n.trim());
+        const sideB = b.playerB.split(',').map(n => n.trim());
+        const hasP1 = sideA.includes(rivalryPlayerA) || sideB.includes(rivalryPlayerA);
+        const hasP2 = sideA.includes(rivalryPlayerB) || sideB.includes(rivalryPlayerB);
+        const hasP1A = sideA.includes(rivalryPlayerA);
+        const hasP2A = sideA.includes(rivalryPlayerB);
+        return hasP1 && hasP2 && (hasP1A !== hasP2A);
+    });
+    
+    mutualWagers.forEach(b => {
+        const sideA = b.playerA.split(',').map(n => n.trim());
+        const sideB = b.playerB.split(',').map(n => n.trim());
+        const isSplit = b.type.endsWith('(Split)');
+        const amount = b.amount;
+        const winnerStr = b.winner.trim();
+        
+        const p1IsSideA = sideA.includes(rivalryPlayerA);
+        
+        if (winnerStr === 'Pending') {
+            activeWagersCount++;
+            return;
+        }
+        if (winnerStr === 'Tie') return;
+        
+        const sideAWins = (winnerStr === b.playerA.trim() || sideA.includes(winnerStr));
+        const sideBWins = (winnerStr === b.playerB.trim() || sideB.includes(winnerStr));
+        
+        let p1Earned = 0;
+        if (sideAWins) {
+            if (p1IsSideA) {
+                p1Earned = isSplit ? (amount / sideA.length) : amount;
+                p1WagerWins++;
+            } else {
+                p1Earned = isSplit ? -(amount / sideA.length) : -amount;
+                p2WagerWins++;
+            }
+        } else if (sideBWins) {
+            if (!p1IsSideA) {
+                p1Earned = isSplit ? (amount / sideB.length) : amount;
+                p1WagerWins++;
+            } else {
+                p1Earned = isSplit ? -(amount / sideA.length) : -amount;
+                p2WagerWins++;
+            }
+        }
+        p1NetWinningsVsP2 += p1Earned;
+    });
+    
+    if (mutualWagers.length === 0) {
+        directWagersListHtml = `<p style="text-align: center; color: var(--text-secondary); padding: 1rem; font-style: italic;">No direct wagers logged between them yet.</p>`;
+    } else {
+        mutualWagers.forEach(b => {
+            let modeLabel = b.type.endsWith('(Split)') ? 'Split' : 'Per Person';
+            let dateStr = formatBetDate(b.timestamp);
+            let wagerStatus = '';
+            let statusClass = '';
+            
+            if (b.paid === 'Yes') {
+                wagerStatus = `🏆 Won by ${b.winner} (Paid)`;
+                statusClass = 'settled-paid';
+            } else if (b.winner !== 'Pending') {
+                wagerStatus = `🎯 Won by ${b.winner} (Awaiting Cash)`;
+                statusClass = 'resolved-unpaid';
+            } else {
+                wagerStatus = `⏳ Active Wager`;
+                statusClass = 'active';
+            }
+            
+            directWagersListHtml += `
+                <div class="rivalry-wager-item ${statusClass}" onclick="showBetDetails('${b.id}')" style="cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 12px; background: hsla(222, 20%, 15%, 0.3); margin-bottom: 0.5rem; transition: border-color 0.2s; text-align: left;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">
+                        <span>${b.event}</span>
+                        <span style="color: var(--accent-gold); font-size: 0.9rem;">$${b.amount.toFixed(0)} (${modeLabel})</span>
+                    </div>
+                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0.15rem 0;">
+                        ${b.playerA} <span style="color: var(--text-secondary); font-weight: 500; font-size: 0.8rem;">VS</span> ${b.playerB}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border-top: 1px solid var(--border-color); padding-top: 0.4rem; margin-top: 0.25rem;">
+                        <span style="color: var(--accent-cyan); font-weight: 600;">${wagerStatus}</span>
+                        ${dateStr ? `<span style="opacity: 0.6;">📅 ${dateStr}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+    }
+
     let p1Wins = 0;
     let p2Wins = 0;
     let ties = 0;
@@ -1205,7 +1299,35 @@ function renderRivalryComparison() {
                 <div class="rivalry-player-val val-highlight" style="color: var(--accent-magenta);">${p2Wins}</div>
             </div>
             
-            <div class="rivalry-records-list">
+            <!-- Direct Head-to-Head Side Wagers -->
+            <div style="margin-top: 1.5rem; background: hsla(222, 20%, 25%, 0.15); padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); text-align: left;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">🎰 Head-to-Head Side Wagers</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1.2fr 1fr; text-align: center; align-items: center; margin-bottom: 1.25rem; gap: 0.5rem;">
+                    <div style="font-size: 1.5rem; font-weight: 800; color: ${p1NetWinningsVsP2 > 0 ? 'var(--accent-green)' : p1NetWinningsVsP2 < 0 ? 'var(--accent-red)' : 'var(--text-secondary)'};">
+                        ${p1NetWinningsVsP2 > 0 ? '+' : ''}$${p1NetWinningsVsP2.toFixed(0)}
+                    </div>
+                    <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">
+                        💰 Net Cash Flow
+                    </div>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: ${-p1NetWinningsVsP2 > 0 ? 'var(--accent-green)' : -p1NetWinningsVsP2 < 0 ? 'var(--accent-red)' : 'var(--text-secondary)'};">
+                        ${-p1NetWinningsVsP2 > 0 ? '+' : ''}$${(-p1NetWinningsVsP2).toFixed(0)}
+                    </div>
+                    
+                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${p1WagerWins}</div>
+                    <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">
+                        🥊 Wagers Won
+                    </div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${p2WagerWins}</div>
+                </div>
+                
+                <div style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <h4 style="font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-secondary);">Direct Wager Logs</h4>
+                    ${directWagersListHtml}
+                </div>
+            </div>
+            
+            <div class="rivalry-records-list" style="margin-top: 1.5rem;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">📜 Historical Matchups Summary</h3>
                 ${recordsHtml}
             </div>
