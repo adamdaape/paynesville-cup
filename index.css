@@ -1539,3 +1539,290 @@ body {
 .teammate-icon {
     font-size: 1.1rem;
 }
+
+/* 🎰 Side Bets Dashboard Styling */
+.bets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    width: 100%;
+}
+
+.bets-nav {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+.bets-pill {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 0.6rem 1.25rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition-speed);
+}
+
+.bets-pill.active {
+    background: linear-gradient(135deg, hsla(180, 100%, 48%, 0.2), hsla(222, 20%, 25%, 0.4));
+    border-color: var(--accent-cyan);
+    color: var(--text-primary);
+}
+
+.bets-pill:hover:not(.active) {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+.bets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Sportsbook Card */
+.bet-card {
+    background: linear-gradient(135deg, hsla(222, 20%, 15%, 0.8), hsla(222, 28%, 7%, 0.9));
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: var(--shadow-premium);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.bet-card.active-bet {
+    border-left: 4px solid var(--accent-cyan);
+}
+
+.bet-card.resolved-unpaid {
+    border-left: 4px solid var(--accent-gold);
+    box-shadow: 0 0 15px hsla(45, 100%, 55%, 0.1);
+}
+
+.bet-card.completed-bet {
+    border-left: 4px solid var(--accent-green);
+    opacity: 0.8;
+}
+
+.bet-card:hover {
+    transform: translateY(-2px);
+    border-color: hsla(222, 20%, 35%, 0.8);
+}
+
+.bet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bet-status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+.bet-status-badge.pending {
+    background: hsla(180, 100%, 48%, 0.1);
+    color: var(--accent-cyan);
+}
+
+.bet-status-badge.unpaid {
+    background: hsla(45, 100%, 55%, 0.1);
+    color: var(--accent-gold);
+    animation: pulse 2s infinite;
+}
+
+.bet-status-badge.paid {
+    background: hsla(145, 80%, 45%, 0.1);
+    color: var(--accent-green);
+}
+
+.bet-matchup {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.bet-player {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    width: 45%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bet-vs {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--text-secondary);
+}
+
+.bet-details-row {
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.bet-event {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.bet-amount {
+    color: var(--accent-gold);
+    font-weight: 800;
+    font-size: 1.05rem;
+}
+
+.bet-quote-bubble {
+    background: hsla(222, 20%, 25%, 0.4);
+    border-radius: 12px;
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    border-left: 2px solid var(--border-color);
+}
+
+.bet-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.bet-btn {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all var(--transition-speed);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.bet-btn.resolve {
+    background: var(--accent-gold);
+    color: hsl(222, 28%, 7%);
+}
+
+.bet-btn.resolve:hover {
+    background: hsl(45, 100%, 65%);
+}
+
+.bet-btn.paid-btn {
+    background: var(--accent-green);
+    color: white;
+}
+
+.bet-btn.paid-btn:hover {
+    background: hsl(145, 80%, 55%);
+}
+
+/* Form Styling */
+.bet-form-card {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.form-input, .form-select, .form-textarea {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem;
+    color: var(--text-primary);
+    outline: none;
+    font-size: 0.95rem;
+    transition: all var(--transition-speed);
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 10px hsla(180, 100%, 48%, 0.2);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+/* Stats Styling */
+.bet-stats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.bet-leaderboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.25rem;
+}
+
+.bet-leaderboard-card {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bet-leaderboard-name {
+    font-weight: 600;
+}
+
+.bet-leaderboard-value {
+    font-weight: 800;
+    font-size: 1.15rem;
+}
+
+.bet-leaderboard-value.positive {
+    color: var(--accent-green);
+}
+
+.bet-leaderboard-value.negative {
+    color: var(--accent-red);
+}
+
+.bet-leaderboard-value.neutral {
+    color: var(--text-secondary);
+}

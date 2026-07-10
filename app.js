@@ -381,9 +381,9 @@ function switchTab(tabName) {
     if (tournamentFilterContainer) tournamentFilterContainer.style.display = 'none';
     if (highlightsContainer) highlightsContainer.style.display = 'none';
     
-    // Restore the main data table structure if coming from the rivalry tab
+    // Restore the main data table structure if coming from the rivalry or bets tab
     const tableContainer = document.getElementById('leaderboard-table-container');
-    if (tabName !== 'rivalry' && !document.getElementById('main-data-table')) {
+    if (tabName !== 'rivalry' && tabName !== 'bets' && !document.getElementById('main-data-table')) {
         tableContainer.innerHTML = '<table class="data-table" id="main-data-table"></table>';
     }
     
@@ -425,6 +425,12 @@ function switchTab(tabName) {
         tableCardTitle.textContent = "Interactive Rivalry Comparison";
         searchBar.style.display = 'none';
         renderRivalryComparison();
+    } else if (tabName === 'bets') {
+        pageTitle.textContent = "🎰 Side Bets Sportsbook";
+        pageSubtitle.textContent = "Create, track, and resolve wagers for the tournament and informal games.";
+        tableCardTitle.textContent = "Live Side Bets Ledger";
+        searchBar.style.display = 'none';
+        renderSideBetsBoard();
     }
 }
 
@@ -1811,3 +1817,492 @@ document.addEventListener('keydown', (e) => {
         closeMedalDetails();
     }
 });
+
+// ----------------- 🎰 SIDE BETS WIDGET & DATABASE INTEGRATION -----------------
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_zeLW5C3JN5n9VtOSiIobG15J_wRoLltG4jCIEv8xUEbO4SRKDead9hjq8pgKMB1AKg/exec';
+let currentBetsSubTab = 'active';
+let sideBetsData = [];
+
+// Fetch and parse Side Bets database from Google Sheets
+async function loadSideBets() {
+    const csvRows = await fetchGoogleSheetCSV('SIDE_BETS');
+    if (!csvRows || csvRows.length <= 1) {
+        sideBetsData = [];
+        return;
+    }
+    const headers = csvRows[0].map(h => h.trim());
+    const dataRows = csvRows.slice(1);
+    
+    const idIdx = headers.indexOf('ID');
+    const pAIdx = headers.indexOf('PlayerA');
+    const pBIdx = headers.indexOf('PlayerB');
+    const typeIdx = headers.indexOf('Type');
+    const eventIdx = headers.indexOf('Event');
+    const amountIdx = headers.indexOf('Amount');
+    const quoteIdx = headers.indexOf('Quote');
+    const winnerIdx = headers.indexOf('Winner');
+    const paidIdx = headers.indexOf('Paid');
+    const timeIdx = headers.indexOf('Timestamp');
+    
+    sideBetsData = dataRows.map(row => {
+        return {
+            id: row[idIdx],
+            playerA: row[pAIdx],
+            playerB: row[pBIdx],
+            type: row[typeIdx],
+            event: row[eventIdx],
+            amount: parseFloat(row[amountIdx]) || 0.0,
+            quote: row[quoteIdx],
+            winner: row[winnerIdx] || 'Pending',
+            paid: row[paidIdx] || 'No',
+            timestamp: row[timeIdx]
+        };
+    }).filter(b => b.id); // ignore empty rows
+    
+    // Auto-resolve any tournament bets in the background
+    autoResolveTournamentBets();
+}
+
+// Background script to auto-resolve bets if tournament results have been input
+function autoResolveTournamentBets() {
+    const activeBets = sideBetsData.filter(b => b.winner === 'Pending');
+    
+    activeBets.forEach(async b => {
+        if (b.type !== 'Cup') return;
+        
+        if (b.event === 'Overall Finish') {
+            const standings2026 = cupData.yearly.filter(y => y.Year === 2026 && y.Place !== 'N/A' && y.Place !== '' && y.Place !== 'None');
+            if (standings2026.length > 0) {
+                const rA = standings2026.find(y => y.Name === b.playerA);
+                const rB = standings2026.find(y => y.Name === b.playerB);
+                if (rA && rB) {
+                    const pA = parsePlace(rA.Place);
+                    const pB = parsePlace(rB.Place);
+                    if (pA !== Infinity && pB !== Infinity) {
+                        let winner = 'Tie';
+                        if (pA < pB) winner = b.playerA;
+                        else if (pB < pA) winner = b.playerB;
+                        
+                        await executeBetActionInBackground({ action: 'resolve', id: b.id, winner: winner });
+                    }
+                }
+            }
+        } else {
+            const tourneyName = b.event.toUpperCase();
+            const tourneyEntries = cupData.granular.filter(g => g.Year === 2026 && g.Tournament === tourneyName);
+            if (tourneyEntries.length > 0) {
+                const rA = tourneyEntries.find(g => g['Player Name'] === b.playerA);
+                const rB = tourneyEntries.find(g => g['Player Name'] === b.playerB);
+                if (rA && rB) {
+                    const pA = parsePlace(rA.Place);
+                    const pB = parsePlace(rB.Place);
+                    if (pA !== Infinity && pB !== Infinity) {
+                        let winner = 'Tie';
+                        if (pA < pB) winner = b.playerA;
+                        else if (pB < pA) winner = b.playerB;
+                        
+                        await executeBetActionInBackground({ action: 'resolve', id: b.id, winner: winner });
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function executeBetActionInBackground(payload) {
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        delete googleSheetsCache['SIDE_BETS'];
+    } catch (e) {
+        console.error("Background bet resolution failed:", e);
+    }
+}
+
+// Render the Side Bets Board
+function renderSideBetsBoard() {
+    const container = document.getElementById('leaderboard-table-container');
+    if (!container) return;
+    
+    let activeClass = currentBetsSubTab === 'active' ? 'active' : '';
+    let createClass = currentBetsSubTab === 'create' ? 'active' : '';
+    let historyClass = currentBetsSubTab === 'history' ? 'active' : '';
+    
+    let navHtml = `
+        <div class="bets-container">
+            <div class="bets-nav">
+                <button class="bets-pill ${activeClass}" onclick="switchBetsSubTab('active')">🔴 Active Bets</button>
+                <button class="bets-pill ${createClass}" onclick="switchBetsSubTab('create')">➕ Create Bet</button>
+                <button class="bets-pill ${historyClass}" onclick="switchBetsSubTab('history')">📜 History & Stats</button>
+            </div>
+            <div id="bets-sub-content">
+                <!-- Inner sub-tab populated dynamically -->
+            </div>
+        </div>
+    `;
+    container.innerHTML = navHtml;
+    
+    const subContent = document.getElementById('bets-sub-content');
+    if (currentBetsSubTab === 'active') {
+        renderActiveBets(subContent);
+    } else if (currentBetsSubTab === 'create') {
+        renderCreateBetForm(subContent);
+    } else if (currentBetsSubTab === 'history') {
+        renderHistoryBets(subContent);
+    }
+}
+
+function switchBetsSubTab(subTab) {
+    currentBetsSubTab = subTab;
+    renderSideBetsBoard();
+}
+
+// Render Active Bets Board
+async function renderActiveBets(container) {
+    container.innerHTML = `
+        <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+            <span class="loading-spinner">⏳</span> Loading wagers from Google Sheets...
+        </div>
+    `;
+    
+    try {
+        await loadSideBets();
+    } catch (e) {
+        console.error("Error loading bets:", e);
+    }
+    
+    const activeBets = sideBetsData.filter(b => b.paid !== 'Yes');
+    
+    if (activeBets.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 4rem 2rem; color: var(--text-secondary);">
+                <div style="font-size: 3.5rem; margin-bottom: 1rem;">🎰</div>
+                <h3 style="color: var(--text-primary); margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif; font-size: 1.5rem;">No active bets right now</h3>
+                <p style="font-size: 1.1rem; max-width: 450px; margin: 0 auto; line-height: 1.6;">
+                    Have a friendly wager on pickleball, cards, lawn games, or overall finish? Click <strong>Create Bet</strong> above to track it!
+                </p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `<div class="bets-grid">`;
+    activeBets.forEach(b => {
+        let statusClass = b.winner === 'Pending' ? 'active-bet' : 'resolved-unpaid';
+        let statusLabel = b.winner === 'Pending' ? 'Active' : 'Resolved — Awaiting Cash Payout';
+        let badgeClass = b.winner === 'Pending' ? 'pending' : 'unpaid';
+        
+        let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
+        
+        let actionHtml = '';
+        if (b.winner === 'Pending') {
+            actionHtml = `
+                <div class="bet-actions">
+                    <button class="bet-btn resolve" onclick="triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
+                </div>
+            `;
+        } else {
+            actionHtml = `
+                <div class="bet-actions">
+                    <button class="bet-btn paid-btn" onclick="triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
+                </div>
+            `;
+        }
+        
+        let winnerText = b.winner === 'Pending' ? '' : `<div style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Winner: ${b.winner}</div>`;
+        
+        html += `
+            <div class="bet-card ${statusClass}">
+                <div class="bet-header">
+                    <span>${b.type} Bet</span>
+                    <span class="bet-status-badge ${badgeClass}">${statusLabel}</span>
+                </div>
+                <div class="bet-matchup">
+                    <span class="bet-player" title="${b.playerA}">${b.playerA}</span>
+                    <span class="bet-vs">VS</span>
+                    <span class="bet-player" style="text-align: right;" title="${b.playerB}">${b.playerB}</span>
+                </div>
+                ${winnerText}
+                <div class="bet-details-row">
+                    <span class="bet-event">${eventLabel}</span>
+                    <span class="bet-amount">$${b.amount.toFixed(0)}</span>
+                </div>
+                ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
+                ${actionHtml}
+            </div>
+        `;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+}
+
+// Render Create Bet Form
+function renderCreateBetForm(container) {
+    const names = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
+    
+    let playerAOptions = '';
+    let playerBOptions = '';
+    names.forEach(n => {
+        playerAOptions += `<option value="${n}">${n}</option>`;
+        playerBOptions += `<option value="${n}">${n}</option>`;
+    });
+    
+    let tourneyOptions = '';
+    MAIN_TOURNAMENTS.forEach(t => {
+        tourneyOptions += `<option value="${t}">${t}</option>`;
+    });
+    
+    let html = `
+        <div class="card bet-form-card">
+            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.5rem; margin-bottom: 1.5rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">🎰 Create a Side Bet</h3>
+            <form id="create-bet-form" onsubmit="handleCreateBetSubmit(event)">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="bet-player-a">Player A *</label>
+                        <select class="form-select" id="bet-player-a" required>
+                            ${playerAOptions}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bet-player-b">Player B *</label>
+                        <select class="form-select" id="bet-player-b" required>
+                            ${playerBOptions}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bet-type">Wager Type *</label>
+                    <select class="form-select" id="bet-type" onchange="toggleBetTypeFields(this.value)" required>
+                        <option value="Cup">🏆 Paynesville Cup Event</option>
+                        <option value="Custom">🎮 Custom / Informal Game</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="group-cup-event">
+                    <label for="bet-event-select">Select Cup Event *</label>
+                    <select class="form-select" id="bet-event-select">
+                        <option value="Overall Finish">Overall Championship Finish</option>
+                        ${tourneyOptions}
+                    </select>
+                </div>
+                
+                <div class="form-group" id="group-custom-event" style="display: none;">
+                    <label for="bet-event-input">Event / Game Name *</label>
+                    <input type="text" class="form-input" id="bet-event-input" placeholder="e.g. Clash Royale, Cornhole, Mini-Golf">
+                </div>
+                
+                <div class="form-group">
+                    <label for="bet-amount">Wager Amount ($) *</label>
+                    <input type="number" class="form-input" id="bet-amount" min="1" max="10000" placeholder="e.g. 5, 20, 100" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bet-quote">Trash Talk / Terms</label>
+                    <textarea class="form-textarea" id="bet-quote" placeholder="Put your trash talk or bet details here..."></textarea>
+                </div>
+                
+                <button type="submit" class="action-btn" id="btn-submit-bet" style="width: 100%; margin-top: 1rem;">🎰 Create Side Bet</button>
+            </form>
+            <div id="bet-submit-status" style="margin-top: 1.5rem; text-align: center; display: none;"></div>
+        </div>
+    `;
+    container.innerHTML = html;
+}
+
+// Render Historical Bets and Money Board Leaderboard
+async function renderHistoryBets(container) {
+    container.innerHTML = `
+        <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+            <span class="loading-spinner">⏳</span> Loading wagers history...
+        </div>
+    `;
+    
+    try {
+        await loadSideBets();
+    } catch (e) {
+        console.error("Error loading stats:", e);
+    }
+    
+    const completedBets = sideBetsData.filter(b => b.paid === 'Yes');
+    
+    // Net Earnings calculator
+    const netEarnings = {};
+    cupData.lifetime.forEach(p => {
+        netEarnings[p.PlayerName] = 0;
+    });
+    
+    // Add up resolved bets earnings
+    const resolvedBets = sideBetsData.filter(b => b.winner !== 'Pending');
+    resolvedBets.forEach(b => {
+        const pA = b.playerA;
+        const pB = b.playerB;
+        const amount = b.amount;
+        const winner = b.winner;
+        
+        if (netEarnings[pA] === undefined) netEarnings[pA] = 0;
+        if (netEarnings[pB] === undefined) netEarnings[pB] = 0;
+        
+        if (winner === pA) {
+            netEarnings[pA] += amount;
+            netEarnings[pB] -= amount;
+        } else if (winner === pB) {
+            netEarnings[pB] += amount;
+            netEarnings[pA] -= amount;
+        }
+    });
+    
+    let leaderboard = Object.entries(netEarnings)
+        .map(([name, val]) => ({ name, val }))
+        .filter(item => {
+            if (item.val !== 0) return true;
+            // keep players who participated in a bet even if their net is 0
+            return sideBetsData.some(b => b.playerA === item.name || b.playerB === item.name);
+        });
+        
+    leaderboard.sort((a,b) => b.val - a.val);
+    
+    let statsHtml = `
+        <div class="bet-stats-container">
+            <div>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; margin-bottom: 1.25rem; color: var(--text-primary);">💰 Net Earnings Leaderboard</h3>
+                <div class="bet-leaderboard-grid">
+    `;
+    
+    if (leaderboard.length === 0) {
+        statsHtml += `
+            <div style="grid-column: 1 / -1; color: var(--text-secondary); font-style: italic;">
+                No side wagers resolved yet. Standings will build once a bet is settled!
+            </div>
+        `;
+    } else {
+        leaderboard.forEach(item => {
+            let earningsClass = item.val > 0 ? 'positive' : item.val < 0 ? 'negative' : 'neutral';
+            let prefix = item.val > 0 ? '+$' : item.val < 0 ? '-$' : '$';
+            let valDisplay = prefix + Math.abs(item.val).toFixed(0);
+            
+            statsHtml += `
+                <div class="bet-leaderboard-card">
+                    <span class="bet-leaderboard-name">${item.name}</span>
+                    <span class="bet-leaderboard-value ${earningsClass}">${valDisplay}</span>
+                </div>
+            `;
+        });
+    }
+    
+    statsHtml += `
+                </div>
+            </div>
+            
+            <div style="margin-top: 1.5rem;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; margin-bottom: 1.25rem; color: var(--text-primary);">📜 Completed & Settled Bets</h3>
+    `;
+    
+    if (completedBets.length === 0) {
+        statsHtml += `
+            <p style="color: var(--text-secondary); font-style: italic; padding: 3rem; text-align: center; border: 1px dashed var(--border-color); border-radius: 16px;">
+                No historical wagers marked settled yet.
+            </p>
+        `;
+    } else {
+        statsHtml += `<div class="bets-grid">`;
+        completedBets.forEach(b => {
+            let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
+            statsHtml += `
+                <div class="bet-card completed-bet">
+                    <div class="bet-header">
+                        <span>${b.type} Bet</span>
+                        <span class="bet-status-badge paid">Settled & Paid</span>
+                    </div>
+                    <div class="bet-matchup">
+                        <span class="bet-player" title="${b.playerA}">${b.playerA}</span>
+                        <span class="bet-vs">VS</span>
+                        <span class="bet-player" style="text-align: right;" title="${b.playerB}">${b.playerB}</span>
+                    </div>
+                    <div style="color: var(--accent-green); font-weight: 700; margin-top: 0.25rem;">🏆 Winner: ${b.winner}</div>
+                    <div class="bet-details-row">
+                        <span class="bet-event">${eventLabel}</span>
+                        <span class="bet-amount" style="color: var(--text-secondary);">$${b.amount.toFixed(0)}</span>
+                    </div>
+                    ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
+                </div>
+            `;
+        });
+        statsHtml += `</div>`;
+    }
+    
+    statsHtml += `
+            </div>
+        </div>
+    `;
+    container.innerHTML = statsHtml;
+}
+
+// Prompt winner dialog for manual wagers
+function triggerResolveBet(betId, playerA, playerB) {
+    const choice = prompt(`Choose the winner:\n1. ${playerA}\n2. ${playerB}\n3. Tie / Push\n\nEnter 1, 2, or 3:`);
+    if (!choice) return;
+    
+    let winner = '';
+    if (choice === '1') {
+        winner = playerA;
+    } else if (choice === '2') {
+        winner = playerB;
+    } else if (choice === '3') {
+        winner = 'Tie';
+    } else {
+        alert("Invalid input! Wager not resolved.");
+        return;
+    }
+    
+    executeBetAction({
+        action: 'resolve',
+        id: betId,
+        winner: winner
+    });
+}
+
+function triggerMarkPaid(betId) {
+    if (!confirm("Are you sure this bet has been paid in cash and is complete?")) return;
+    executeBetAction({
+        action: 'markPaid',
+        id: betId
+    });
+}
+
+// Background post updater for Google Sheets Web App
+async function executeBetAction(payload) {
+    const container = document.getElementById('bets-sub-content');
+    container.innerHTML = `
+        <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+            <span class="loading-spinner">⏳</span> Submitting changes to Google Sheets...
+        </div>
+    `;
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        // Clear local cache for side bets
+        delete googleSheetsCache['SIDE_BETS'];
+        
+        // Reload
+        setTimeout(() => {
+            renderSideBetsBoard();
+        }, 1000);
+    } catch (err) {
+        console.error("Error executing bet action:", err);
+        alert(`Error communicating with Sheets: ${err.message}`);
+        renderSideBetsBoard();
+    }
+}
