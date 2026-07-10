@@ -1816,6 +1816,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closePlayerCard();
         closeMedalDetails();
+        closeBetDetails();
     }
 });
 
@@ -2024,13 +2025,13 @@ async function renderActiveBets(container) {
         if (b.winner === 'Pending') {
             actionHtml = `
                 <div class="bet-actions">
-                    <button class="bet-btn resolve" onclick="triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
+                    <button class="bet-btn resolve" onclick="event.stopPropagation(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
                 </div>
             `;
         } else {
             actionHtml = `
                 <div class="bet-actions">
-                    <button class="bet-btn paid-btn" onclick="triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
+                    <button class="bet-btn paid-btn" onclick="event.stopPropagation(); triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
                 </div>
             `;
         }
@@ -2038,7 +2039,7 @@ async function renderActiveBets(container) {
         let winnerText = b.winner === 'Pending' ? '' : `<div style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Winner: ${b.winner}</div>`;
         
         html += `
-            <div class="bet-card ${statusClass}">
+            <div class="bet-card ${statusClass}" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
                 <div class="bet-header">
                     <span>${b.type} Bet</span>
                     <span class="bet-status-badge ${badgeClass}">${statusLabel}</span>
@@ -2557,7 +2558,7 @@ async function renderHistoryBets(container) {
             let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
             let dateStr = formatBetDate(b.timestamp);
             statsHtml += `
-                <div class="bet-card completed-bet">
+                <div class="bet-card completed-bet" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
                     <div class="bet-header">
                         <span>${b.type} Bet</span>
                         <span class="bet-status-badge paid">Settled & Paid</span>
@@ -2650,4 +2651,102 @@ async function executeBetAction(payload) {
         alert(`Error communicating with Sheets: ${err.message}`);
         renderSideBetsBoard();
     }
+}
+
+// Show Bet details modal overlay
+function showBetDetails(id) {
+    const b = sideBetsData.find(x => x.id === id);
+    if (!b) return;
+    
+    const sideA = b.playerA.split(',').map(n => n.trim()).filter(n => n);
+    const sideB = b.playerB.split(',').map(n => n.trim()).filter(n => n);
+    
+    let sideAHtml = sideA.map(name => `
+        <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-color);" onclick="closeBetDetails(); showPlayerCard('${name.replace(/'/g, "\\'")}')">👤 ${name}</div>
+    `).join('');
+    
+    let sideBHtml = sideB.map(name => `
+        <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-color);" onclick="closeBetDetails(); showPlayerCard('${name.replace(/'/g, "\\'")}')">👤 ${name}</div>
+    `).join('');
+    
+    let isSplit = b.type.endsWith('(Split)');
+    let modeLabel = isSplit ? 'Total Pot Split 👥' : 'Per Person 💵';
+    let statusLabel = b.paid === 'Yes' ? 'Settled & Paid' : b.winner !== 'Pending' ? 'Resolved — Awaiting Payout' : 'Active Wager';
+    let dateStr = formatBetDate(b.timestamp);
+    
+    let actionHtml = '';
+    if (b.paid !== 'Yes') {
+        if (b.winner === 'Pending') {
+            actionHtml = `
+                <button class="bet-btn resolve" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
+            `;
+        } else {
+            actionHtml = `
+                <button class="bet-btn paid-btn" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
+            `;
+        }
+    }
+    
+    let winnerHtml = b.winner === 'Pending' ? '' : `
+        <div style="background: hsla(145, 80%, 45%, 0.08); border: 1px solid var(--accent-green); padding: 0.75rem; border-radius: 12px; text-align: center; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+            <span style="color: var(--accent-green); font-weight: 800; font-size: 1.1rem;">🏆 Winner: ${b.winner}</span>
+        </div>
+    `;
+    
+    const inner = document.getElementById('bet-details-inner');
+    inner.innerHTML = `
+        <div class="card-header-block" style="margin-bottom: 1.25rem;">
+            <div class="card-name" style="font-size: 1.5rem;">🎰 Wager Details</div>
+            <div class="card-nickname" style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Status: ${statusLabel}</div>
+        </div>
+        
+        <div style="background: hsla(222, 20%, 15%, 0.5); padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; text-align: center;">
+                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Side A</div>
+                ${sideAHtml}
+            </div>
+            
+            <div style="text-align: center; font-weight: 800; color: var(--text-secondary); font-size: 0.9rem; margin: 0.25rem 0;">⚡ VS ⚡</div>
+            
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; text-align: center;">
+                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Side B</div>
+                ${sideBHtml}
+            </div>
+        </div>
+        
+        ${winnerHtml}
+        
+        <div class="sports-stats-grid" style="grid-template-columns: 1fr 1fr; margin-top: 0.5rem; margin-bottom: 1rem;">
+            <div class="sports-stat-col" style="background: hsla(222, 20%, 15%, 0.4); padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                <span class="sports-stat-lbl">WAGER</span>
+                <span class="sports-stat-val" style="color: var(--accent-gold); font-size: 1.3rem;">$${b.amount.toFixed(0)}</span>
+            </div>
+            <div class="sports-stat-col" style="background: hsla(222, 20%, 15%, 0.4); padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                <span class="sports-stat-lbl">MODE</span>
+                <span class="sports-stat-val" style="font-size: 0.95rem; font-weight: 700; margin-top: 0.2rem; text-transform: none;">${modeLabel}</span>
+            </div>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.95rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+            <div><span style="color: var(--text-secondary); font-weight: 600;">Game/Event:</span> <span style="font-weight: 700; color: var(--text-primary);">${b.event}</span></div>
+            ${dateStr ? `<div><span style="color: var(--text-secondary); font-weight: 600;">Logged:</span> <span style="color: var(--text-primary); font-weight: 700;">${dateStr}</span></div>` : ''}
+        </div>
+        
+        ${b.quote ? `
+            <div class="bet-quote-bubble" style="margin-top: 0.5rem; margin-bottom: 1rem; background: var(--bg-sidebar); border-left: 4px solid var(--accent-cyan);">
+                <strong style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">Note / Terms:</strong><br>
+                <span style="font-style: italic; color: var(--text-primary);">"${b.quote}"</span>
+            </div>
+        ` : ''}
+        
+        ${actionHtml}
+    `;
+    
+    document.getElementById('bet-details-modal').classList.add('active');
+}
+
+function closeBetDetails(event) {
+    if (event) event.stopPropagation();
+    const modal = document.getElementById('bet-details-modal');
+    if (modal) modal.classList.remove('active');
 }

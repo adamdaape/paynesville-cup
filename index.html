@@ -151,6 +151,17 @@ Read the live leaderboards, bubble watches, and matchups here:
         </div>
     </div>
 
+    <!-- Bet Details Modal Overlay -->
+    <div class="modal-overlay" id="bet-details-modal" onclick="closeBetDetails(event)">
+        <div class="player-card" id="bet-details-container" onclick="event.stopPropagation()">
+            <button class="close-card-btn" onclick="closeBetDetails(event)">×</button>
+            <div class="card-glow"></div>
+            <div class="card-inner" id="bet-details-inner">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
     <!-- Mobile Bottom Navigation Bar (hidden on desktop via CSS) -->
     <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
         <button class="mobile-nav-btn active" id="mobile-btn-lifetime" onclick="switchTab('lifetime')">
@@ -184,6 +195,6 @@ Read the live leaderboards, bubble watches, and matchups here:
     </nav>
 
     <!-- Script -->
-    <script src="app.js?v=2026.2"></script>
+    <script src="app.js?v=2026.3"></script>
 </body>
 </html>
