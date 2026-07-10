@@ -857,7 +857,7 @@ body {
         border-radius: 20px 20px 0 0;
         padding: 1.5rem 1.25rem;
         transform: translateY(100%); /* start off-screen below */
-        overflow-y: auto;
+        overflow: hidden;
     }
 
     .modal-overlay.active .player-card {
@@ -1161,6 +1161,26 @@ body {
     flex-direction: column;
     height: 100%;
     gap: 1.5rem;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+/* Premium scrollbar for card inner */
+.card-inner::-webkit-scrollbar {
+    width: 6px;
+}
+
+.card-inner::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.card-inner::-webkit-scrollbar-thumb {
+    background: hsla(222, 20%, 30%, 0.5);
+    border-radius: 10px;
+}
+
+.card-inner::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-cyan);
 }
 
 /* Card specific typography */

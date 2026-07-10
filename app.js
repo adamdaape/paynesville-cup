@@ -1,9 +1,13 @@
 // 📊 Paynesville Cup Frontend Application Logic
 
+// Google Sheets Live Data Configuration
+const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
+let googleSheetsCache = {};
+
 // Global State
 let cupData = null;
 let currentTab = 'lifetime';
-let selectedYear = 2025;
+let selectedYear = 2026; // Default to the active 2026 season
 let selectedTournament = '3-CLUB CHALLENGE';
 let searchQuery = '';
 
@@ -23,6 +27,268 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchCupData();
 });
 
+// Fetch Google Sheet tab as CSV
+async function fetchGoogleSheetCSV(sheetName) {
+    if (googleSheetsCache[sheetName]) {
+        return googleSheetsCache[sheetName];
+    }
+    const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const text = await response.text();
+        const parsed = parseCSV(text);
+        googleSheetsCache[sheetName] = parsed;
+        return parsed;
+    } catch (e) {
+        console.error(`Failed to fetch sheet ${sheetName}: `, e);
+        return null;
+    }
+}
+
+// RFC-4180 compliant CSV parser
+function parseCSV(text) {
+    const lines = [];
+    let row = [""];
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        const next = text[i+1];
+        if (c === '"') {
+            if (inQuotes && next === '"') {
+                row[row.length - 1] += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (c === ',' && !inQuotes) {
+            row.push("");
+        } else if ((c === '\r' || c === '\n') && !inQuotes) {
+            if (c === '\r' && next === '\n') {
+                i++;
+            }
+            lines.push(row.map(cell => cell.trim()));
+            row = [""];
+        } else {
+            row[row.length - 1] += c;
+        }
+    }
+    if (row.length > 1 || row[0] !== "") {
+        lines.push(row.map(cell => cell.trim()));
+    }
+    return lines;
+}
+
+const NAME_MAPPINGS = {
+    "Katie Bonicatto": "Katie Breviu",
+    "Kate Breviu": "Katie Breviu",
+    "Brodie": "Brody",
+    "Sawyer Sherer": "Sawyer Scherer",
+    "Sawyer Scherer": "Sawyer Scherer",
+    "Donna Wieneke": "Donna Weineke",
+    "Donna Bonicatto": "Donna Weineke",
+    "Dave Modrow": "Dave (Sr.) Modrow",
+    "Angi Willette": "Angie Willette",
+    "Cinci Rob": "(Cincy) Rob Murphy",
+    "Cinci Rob Murphy": "(Cincy) Rob Murphy",
+    "Uncle Rob Murphy": "(Cincy) Rob Murphy",
+    "Rob Murphy": "(Cincy) Rob Murphy",
+    "Kelli Lindseth": "Kelly Lindseth",
+    "Kylina": "Kilayna",
+    "Luke Weineke": "Luke Wieneke",
+    "Matt Stahlman": "Matt Stahlmann",
+    "Tricia Stahlman": "Tricia Stahlmann",
+    "Samanatha Pettit": "Samantha Pettit",
+    "Zach Schirmers": "Zack Schirmers",
+    "Ben Aeshhilman": "Ben Aeshliman",
+    "Ben Aeshilman": "Ben Aeshliman",
+    "Patrick Iriwn": "Patrick Irwin",
+    "Shaun irwin": "Shaun Irwin",
+    "Mel Murphy": "Melanie Murphy"
+};
+
+const BLACKLIST_NAMES = new Set([
+    'KEY', 'Active Score', 'Inactive Score', 'No Participation', 'Booby Prize', 'nan', '', 'None', 'undefined', 'null'
+]);
+
+function cleanPlayerName(name) {
+    if (!name || typeof name !== 'string') return "";
+    const cleaned = name.replace(/\s+/g, ' ').trim();
+    if (NAME_MAPPINGS[cleaned]) {
+        return NAME_MAPPINGS[cleaned];
+    }
+    return cleaned;
+}
+
+function isValidPlayer(name) {
+    if (!name || BLACKLIST_NAMES.has(name)) return false;
+    if (name.toLowerCase().startsWith('note')) return false;
+    return true;
+}
+
+// Fetch and merge 2026 google sheets standings into the app state
+async function merge2026LiveData() {
+    const csvRows = await fetchGoogleSheetCSV('STANDINGS');
+    if (!csvRows || csvRows.length <= 1) {
+        console.warn("Could not retrieve 2026 Standings data from Google Sheets.");
+        return;
+    }
+    
+    const headers = csvRows[0].map(h => h.trim());
+    const dataRows = csvRows.slice(1);
+    
+    const nameIdx = headers.indexOf('Name');
+    const placeIdx = headers.indexOf('Place');
+    const pointsIdx = headers.indexOf('Points');
+    const tourneysIdx = headers.indexOf('Tournaments Entered');
+    const totalScoreIdx = headers.indexOf('Total Score');
+    const avgScoreIdx = headers.indexOf('Average Score');
+    
+    if (nameIdx === -1) {
+        console.error("Name column not found in 2026 STANDINGS sheet.");
+        return;
+    }
+    
+    const standings2026 = [];
+    dataRows.forEach(row => {
+        const rawName = row[nameIdx];
+        const name = cleanPlayerName(rawName);
+        if (!isValidPlayer(name)) return;
+        
+        const ptsVal = parseFloat(row[pointsIdx]) || 0.0;
+        const tourneysVal = parseInt(row[tourneysIdx]) || 0;
+        const totalScoreVal = parseFloat(row[totalScoreIdx]) || 0.0;
+        const avgScoreVal = parseFloat(row[avgScoreIdx]) || 0.0;
+        
+        standings2026.push({
+            'Year': 2026,
+            'Place': row[placeIdx] || 'N/A',
+            'Name': name,
+            'Cup Points': ptsVal,
+            'Tournaments Entered': tourneysVal,
+            'Total Score': totalScoreVal,
+            'Average Score': avgScoreVal
+        });
+    });
+    
+    // Merge into cupData.yearly (filter out existing 2026 entries first)
+    cupData.yearly = cupData.yearly.filter(y => y.Year !== 2026);
+    cupData.yearly = cupData.yearly.concat(standings2026);
+    
+    // Merge 2026 standings into lifetime records
+    const lifetimeMap = {};
+    cupData.lifetime.forEach(p => {
+        p['2026'] = null; // Default to null for 2026
+        lifetimeMap[p.PlayerName] = p;
+    });
+    
+    standings2026.forEach(st => {
+        const name = st.Name;
+        const pts2026 = st['Cup Points'];
+        const tourneys2026 = st['Tournaments Entered'];
+        
+        // We only count them as participating in 2026 if they have entries or points
+        const hasParticipated = tourneys2026 > 0 || pts2026 > 0;
+        
+        if (lifetimeMap[name]) {
+            const p = lifetimeMap[name];
+            p['2026'] = hasParticipated ? pts2026 : null;
+            
+            // Recalculate lifetime stats
+            const activeScores = [];
+            ['2022', '2023', '2024', '2025', '2026'].forEach(yr => {
+                const score = p[yr];
+                if (score !== null && score !== undefined && !isNaN(score)) {
+                    activeScores.push(score);
+                }
+            });
+            
+            p.LifetimeCupPoints = activeScores.reduce((sum, val) => sum + val, 0);
+            p.YearsCompeted = activeScores.length;
+            p.AverageCupScore = p.YearsCompeted > 0 ? (p.LifetimeCupPoints / p.YearsCompeted) : 0.0;
+            p.TotalTournamentsEntered = (p.TotalTournamentsEntered || 0) + (hasParticipated ? tourneys2026 : 0);
+        } else {
+            // New player
+            const newPlayer = {
+                'PlayerName': name,
+                'LifetimeCupPoints': pts2026,
+                'TotalTournamentsEntered': hasParticipated ? tourneys2026 : 0,
+                'YearsCompeted': hasParticipated ? 1 : 0,
+                'AverageCupScore': hasParticipated ? pts2026 : 0.0,
+                '2022': null,
+                '2023': null,
+                '2024': null,
+                '2025': null,
+                '2026': hasParticipated ? pts2026 : null
+            };
+            cupData.lifetime.push(newPlayer);
+            lifetimeMap[name] = newPlayer;
+        }
+    });
+    
+    // Sort lifetime data
+    cupData.lifetime.sort((a, b) => b.LifetimeCupPoints - a.LifetimeCupPoints);
+}
+
+// Fetch and merge 2026 granular tournament events
+async function ensure2026EventDataLoaded(tournamentName) {
+    const cacheKey = `EVENT_${tournamentName}`;
+    if (googleSheetsCache[cacheKey]) {
+        return;
+    }
+    
+    const csvRows = await fetchGoogleSheetCSV(tournamentName);
+    if (!csvRows || csvRows.length <= 1) {
+        googleSheetsCache[cacheKey] = [];
+        return;
+    }
+    
+    const headers = csvRows[0].map(h => h.trim());
+    const dataRows = csvRows.slice(1);
+    
+    const nameIdx = headers.indexOf('Name');
+    const placeIdx = headers.indexOf('Place');
+    
+    let ptsIdx = -1;
+    for (let c of ['PC Points', 'PC POINTS', 'Points', 'POINTS', 'PC Pt', 'PC Pts']) {
+        ptsIdx = headers.indexOf(c);
+        if (ptsIdx !== -1) break;
+    }
+    
+    let scoreIdx = -1;
+    for (let c of ['Score', 'Games Won', 'Games', 'Result', 'Points Won', 'Wins']) {
+        scoreIdx = headers.indexOf(c);
+        if (scoreIdx !== -1) break;
+    }
+    
+    const entries2026 = [];
+    dataRows.forEach(row => {
+        const rawName = row[nameIdx];
+        const name = cleanPlayerName(rawName);
+        if (!isValidPlayer(name)) return;
+        
+        const ptsVal = ptsIdx !== -1 ? parseFloat(row[ptsIdx]) : 0.0;
+        const scoreVal = scoreIdx !== -1 ? row[scoreIdx] : 'N/A';
+        
+        entries2026.push({
+            'Year': 2026,
+            'Tournament': tournamentName.toUpperCase(),
+            'Player Name': name,
+            'Place': row[placeIdx] || 'N/A',
+            'Score': scoreVal || 'N/A',
+            'PC Points': isNaN(ptsVal) ? 0.0 : ptsVal
+        });
+    });
+    
+    googleSheetsCache[cacheKey] = entries2026;
+    
+    // Clear and merge into granular event database
+    cupData.granular = cupData.granular.filter(g => !(g.Year === 2026 && g.Tournament === tournamentName.toUpperCase()));
+    cupData.granular = cupData.granular.concat(entries2026);
+}
+
 // Fetch data from cup_data.json
 async function fetchCupData() {
     try {
@@ -31,6 +297,13 @@ async function fetchCupData() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         cupData = await response.json();
+        
+        // Merge Google Sheets live data for 2026
+        try {
+            await merge2026LiveData();
+        } catch (sheetError) {
+            console.error("Could not load 2026 live data from Google Sheets, showing cached standings:", sheetError);
+        }
         
         // Populate search lists and metadata
         populateMetadata();
@@ -41,7 +314,7 @@ async function fetchCupData() {
         console.error("Failed to load cup data: ", e);
         document.getElementById('main-data-table').innerHTML = `
             <tr>
-                <td colspan="10" style="text-align: center; color: var(--accent-red); font-weight: 600; padding: 3rem;">
+                <td colspan="11" style="text-align: center; color: var(--accent-red); font-weight: 600; padding: 3rem;">
                     ⚠️ Error loading database: Please ensure 'compile_to_json.py' has been run and 'cup_data.json' exists.
                 </td>
             </tr>
@@ -116,7 +389,7 @@ function switchTab(tabName) {
     
     if (tabName === 'lifetime') {
         pageTitle.textContent = "Paynesville Cup Master Leaderboard";
-        pageSubtitle.textContent = "Cumulative statistics, years competed, and active point streaks across 2022-2025.";
+        pageSubtitle.textContent = "Cumulative statistics, years competed, and active point streaks across 2022-2026.";
         tableCardTitle.textContent = "Lifetime Standings";
         sortKey = 'LifetimeCupPoints';
         sortAscending = false;
@@ -142,7 +415,7 @@ function switchTab(tabName) {
         tableCardTitle.textContent = "2026 Championship Predictions";
         renderOddsTable();
     } else if (tabName === 'bubble') {
-        pageTitle.textContent = "🎈 The Top-4 Bubble Watch (2025)";
+        pageTitle.textContent = "🎈 The Top-4 Bubble Watch (2026)";
         pageSubtitle.textContent = "Standing stabilization trackers showing who has a chance to discard their lowest score in the next event.";
         tableCardTitle.textContent = "Active Standings Bubble List";
         renderBubbleTable();
@@ -246,13 +519,14 @@ function renderLifetimeTable() {
                 <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2023')" title="2023 Cup Score">2023 ${getSortIndicator('2023', sortKey, sortAscending)}</th>
                 <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2024')" title="2024 Cup Score">2024 ${getSortIndicator('2024', sortKey, sortAscending)}</th>
                 <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2025')" title="2025 Cup Score">2025 ${getSortIndicator('2025', sortKey, sortAscending)}</th>
+                <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2026')" title="2026 Cup Score">2026 ${getSortIndicator('2026', sortKey, sortAscending)}</th>
             </tr>
         </thead>
         <tbody>
     `;
     
     if (filtered.length === 0) {
-        html += `<tr><td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No players found matching your search.</td></tr>`;
+        html += `<tr><td colspan="11" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No players found matching your search.</td></tr>`;
     } else {
         filtered.forEach((p, idx) => {
             // Find absolute rank based on overall standings list order
@@ -265,6 +539,7 @@ function renderLifetimeTable() {
             const cell2023 = p['2023'] !== null ? `${p['2023'].toFixed(1)}` : '-';
             const cell2024 = p['2024'] !== null ? `${p['2024'].toFixed(1)}` : '-';
             const cell2025 = p['2025'] !== null ? `${p['2025'].toFixed(1)}` : '-';
+            const cell2026 = p['2026'] !== null && p['2026'] !== undefined ? `${p['2026'].toFixed(1)}` : '-';
             
             html += `
                 <tr>
@@ -278,6 +553,7 @@ function renderLifetimeTable() {
                     <td style="text-align: center; opacity: ${p['2023'] !== null ? 1 : 0.4};">${cell2023}</td>
                     <td style="text-align: center; opacity: ${p['2024'] !== null ? 1 : 0.4};">${cell2024}</td>
                     <td style="text-align: center; opacity: ${p['2025'] !== null ? 1 : 0.4};">${cell2025}</td>
+                    <td style="text-align: center; opacity: ${p['2026'] !== null && p['2026'] !== undefined ? 1 : 0.4};">${cell2026}</td>
                 </tr>
             `;
         });
@@ -404,10 +680,29 @@ function setTournamentSort(key) {
     renderTournamentTable();
 }
 
-function renderTournamentTable() {
+async function renderTournamentTable() {
     if (!cupData) return;
     
     const table = document.getElementById('main-data-table');
+    
+    // Check if we need to load 2026 live data for this tournament
+    const cacheKey = `EVENT_${selectedTournament}`;
+    if (!googleSheetsCache[cacheKey]) {
+        table.innerHTML = `
+            <tbody>
+                <tr>
+                    <td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                        <span class="loading-spinner">⏳</span> Loading live 2026 results from Google Sheets...
+                    </td>
+                </tr>
+            </tbody>
+        `;
+        try {
+            await ensure2026EventDataLoaded(selectedTournament);
+        } catch (e) {
+            console.error("Failed to load live 2026 event data", e);
+        }
+    }
     
     const allTourneyData = cupData.granular.filter(g => g.Tournament === selectedTournament);
     const availableYears = [...new Set(allTourneyData.map(g => g.Year))].sort((a, b) => b - a);
@@ -658,21 +953,117 @@ function renderBubbleTable() {
     
     const table = document.getElementById('main-data-table');
     
+    // Check if there are any 2026 granular event entries with scores
+    const entries2026 = cupData.granular.filter(g => g.Year === 2026 && g['PC Points'] > 0);
+    
+    if (entries2026.length === 0) {
+        let html = `
+            <tbody>
+                <tr>
+                    <td style="text-align: center; padding: 4rem 2rem; border-bottom: none;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🎈</div>
+                        <h3 style="font-size: 1.5rem; color: var(--text-primary); margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif;">2026 Bubble Watch is Pending</h3>
+                        <p style="color: var(--text-secondary); font-size: 1.1rem; max-width: 500px; margin: 0 auto; line-height: 1.5;">
+                            The 2026 Paynesville Cup starts this weekend! 
+                            <br><br>
+                            Once tournament scores begin to be entered starting Monday, the live standings and Top-4 Bubble Watch tracker will activate here.
+                        </p>
+                    </td>
+                </tr>
+            </tbody>
+        `;
+        table.innerHTML = html;
+        return;
+    }
+    
+    // Compute Bubble Watch list dynamically
+    const bubbleList = [];
+    const playerNames = [...new Set(entries2026.map(e => e['Player Name']))];
+    
+    playerNames.forEach(player => {
+        const playerEvents = entries2026.filter(e => e['Player Name'] === player);
+        const playedCount = playerEvents.length;
+        if (playedCount === 0) return;
+        
+        const scores = playerEvents.map(e => e['PC Points']).sort((a, b) => b - a);
+        
+        let bubbleStatus = "";
+        let bubbleScore = null;
+        let targetScore = 0.5;
+        let details = "";
+        
+        if (playedCount < 4) {
+            bubbleStatus = "Incomplete";
+            details = `Needs ${4 - playedCount} more event(s) to stabilize standings.`;
+        } else {
+            bubbleStatus = "Active";
+            bubbleScore = scores[3]; // 4th score
+            targetScore = bubbleScore + 0.5;
+            details = `Playing event #${playedCount + 1}. Scoring > ${bubbleScore.toFixed(1)} pts will discard it and boost standings!`;
+        }
+        
+        bubbleList.push({
+            Player: player,
+            EventsPlayed: playedCount,
+            Status: bubbleStatus,
+            BubbleScore: bubbleScore,
+            TargetScore: targetScore,
+            Details: details,
+            TopScores: scores
+        });
+    });
+    
+    // Sort: Active status first, then by events played descending
+    bubbleList.sort((a, b) => {
+        if (a.Status === b.Status) {
+            return b.EventsPlayed - a.EventsPlayed;
+        }
+        return a.Status === 'Active' ? -1 : 1;
+    });
+    
     let html = `
-        <tbody>
+        <thead>
             <tr>
-                <td style="text-align: center; padding: 4rem 2rem; border-bottom: none;">
-                    <div style="font-size: 3rem; margin-bottom: 1rem;">🎈</div>
-                    <h3 style="font-size: 1.5rem; color: var(--text-primary); margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif;">Bubble Watch is Inactive</h3>
-                    <p style="color: var(--text-secondary); font-size: 1.1rem; max-width: 500px; margin: 0 auto; line-height: 1.5;">
-                        The 2025 Paynesville Cup has officially concluded! There are no active bubble watches. 
-                        <br><br>
-                        Check back when the <strong>2026</strong> tournaments begin to see live Top-4 standing stabilization trackers.
-                    </p>
-                </td>
+                <th style="width: 52px;">Rank</th>
+                <th style="min-width: 150px;">Player</th>
+                <th style="text-align: center;">Events Played</th>
+                <th style="text-align: center;">Status</th>
+                <th style="text-align: right;">Current Bubble Score</th>
+                <th style="text-align: right;">Target to Improve</th>
+                <th>Tracker Details</th>
             </tr>
-        </tbody>
+        </thead>
+        <tbody>
     `;
+    
+    bubbleList.forEach((b, idx) => {
+        const rank = idx + 1;
+        const bubbleDisplay = b.BubbleScore !== null ? b.BubbleScore.toFixed(1) : '-';
+        const targetDisplay = b.TargetScore.toFixed(1);
+        
+        // Custom styling for badge
+        const badgeStyle = b.Status === 'Active' 
+            ? 'background: hsla(145, 80%, 45%, 0.15); color: var(--accent-green); border: 1px solid hsla(145, 80%, 45%, 0.3); padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase;' 
+            : 'background: hsla(45, 100%, 55%, 0.15); color: var(--accent-gold); border: 1px solid hsla(45, 100%, 55%, 0.3); padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase;';
+            
+        html += `
+            <tr>
+                <td style="text-align: center;"><span class="rank-badge rank-other">${rank}</span></td>
+                <td style="font-weight: 600; color: var(--text-primary); cursor: pointer;" onclick="showPlayerCard('${b.Player}')">${b.Player}</td>
+                <td style="text-align: center; font-weight: 600;">${b.EventsPlayed}</td>
+                <td style="text-align: center;">
+                    <span style="${badgeStyle}">
+                        ${b.Status}
+                    </span>
+                </td>
+                <td style="text-align: right; color: var(--accent-cyan); font-weight: 700;">${bubbleDisplay}</td>
+                <td style="text-align: right; color: var(--accent-magenta); font-weight: 700;">&gt; ${targetDisplay}</td>
+                <td style="font-size: 0.85rem; color: var(--text-secondary); font-style: italic;">${b.Details}</td>
+            </tr>
+        `;
+    });
+    
+    html += `</tbody>`;
     table.innerHTML = html;
 }
 
