@@ -2113,13 +2113,13 @@ function renderCreateBetForm(container) {
                 <div id="normal-mode-fields">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
                         <div class="form-group">
-                            <label>Side A (Winners) *</label>
+                            <label>Side A *</label>
                             <div style="max-height: 140px; overflow-y: auto; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 0.25rem;">
                                 ${sideACheckboxes}
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Side B (Losers) *</label>
+                            <label>Side B *</label>
                             <div style="max-height: 140px; overflow-y: auto; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 0.25rem;">
                                 ${sideBCheckboxes}
                             </div>
