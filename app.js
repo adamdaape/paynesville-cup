@@ -106,7 +106,8 @@ const NAME_MAPPINGS = {
     "Ben Aeshilman": "Ben Aeshliman",
     "Patrick Iriwn": "Patrick Irwin",
     "Shaun irwin": "Shaun Irwin",
-    "Mel Murphy": "Melanie Murphy"
+    "Mel Murphy": "Melanie Murphy",
+    "Max": "Max Murphy"
 };
 
 const BLACKLIST_NAMES = new Set([
@@ -1961,6 +1962,23 @@ function switchBetsSubTab(subTab) {
     renderSideBetsBoard();
 }
 
+// Format bet ISO timestamp into a beautiful readable date (e.g. "Jul 10, 11:20 AM")
+function formatBetDate(isoString) {
+    if (!isoString) return '';
+    try {
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return '';
+    }
+}
+
 // Render Active Bets Board
 async function renderActiveBets(container) {
     container.innerHTML = `
@@ -1976,6 +1994,9 @@ async function renderActiveBets(container) {
     }
     
     const activeBets = sideBetsData.filter(b => b.paid !== 'Yes');
+    
+    // Sort Active Bets: newest (most recently created) first
+    activeBets.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
     if (activeBets.length === 0) {
         container.innerHTML = `
@@ -1997,6 +2018,7 @@ async function renderActiveBets(container) {
         let badgeClass = b.winner === 'Pending' ? 'pending' : 'unpaid';
         
         let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
+        let dateStr = formatBetDate(b.timestamp);
         
         let actionHtml = '';
         if (b.winner === 'Pending') {
@@ -2031,6 +2053,7 @@ async function renderActiveBets(container) {
                     <span class="bet-event">${eventLabel}</span>
                     <span class="bet-amount">$${b.amount.toFixed(0)}</span>
                 </div>
+                ${dateStr ? `<div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.7; display: flex; align-items: center; gap: 0.25rem; margin-top: -0.5rem; margin-bottom: 0.25rem;">📅 Created: ${dateStr}</div>` : ''}
                 ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
                 ${actionHtml}
             </div>
@@ -2209,6 +2232,9 @@ async function renderHistoryBets(container) {
     
     const completedBets = sideBetsData.filter(b => b.paid === 'Yes');
     
+    // Sort Completed Bets: newest first
+    completedBets.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
     // Net Earnings calculator
     const netEarnings = {};
     cupData.lifetime.forEach(p => {
@@ -2291,6 +2317,7 @@ async function renderHistoryBets(container) {
         statsHtml += `<div class="bets-grid">`;
         completedBets.forEach(b => {
             let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
+            let dateStr = formatBetDate(b.timestamp);
             statsHtml += `
                 <div class="bet-card completed-bet">
                     <div class="bet-header">
@@ -2307,6 +2334,7 @@ async function renderHistoryBets(container) {
                         <span class="bet-event">${eventLabel}</span>
                         <span class="bet-amount" style="color: var(--text-secondary);">$${b.amount.toFixed(0)}</span>
                     </div>
+                    ${dateStr ? `<div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.6; display: flex; align-items: center; gap: 0.25rem; margin-top: -0.5rem; margin-bottom: 0.25rem;">📅 Created: ${dateStr}</div>` : ''}
                     ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
                 </div>
             `;
