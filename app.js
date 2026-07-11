@@ -2465,7 +2465,7 @@ function handleBulkOpponentChange() {
     
     let html = '';
     checkedOpponents.forEach(p => {
-        let val = existingValues[p] || '5';
+        let val = existingValues[p] || '1';
         html += `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid var(--border-color);">
                 <span style="font-weight: 600; font-size: 0.9rem;">${p}</span>
@@ -2533,12 +2533,12 @@ function updateOddsPreview() {
         
         const overrides = {};
         document.querySelectorAll('.bulk-amount-override').forEach(inp => {
-            overrides[inp.getAttribute('data-player')] = parseFloat(inp.value) || 5.0;
+            overrides[inp.getAttribute('data-player')] = parseFloat(inp.value) || 1.0;
         });
         
         let previewHtml = `💡 <strong>Odds Ratio:</strong> ${numVal}:${denVal} (${multiplier.toFixed(2)}x payout)<br>`;
         opponents.forEach(opp => {
-            const amount = overrides[opp] || 5.0;
+            const amount = overrides[opp] || 1.0;
             const winAmount = amount * multiplier;
             previewHtml += `
                 • Against <strong>${opp}</strong> (stake: $${amount.toFixed(0)}): If ${playerA} wins &rarr; wins <strong>$${winAmount.toFixed(0)}</strong>. If ${opp} wins &rarr; wins <strong>$${amount.toFixed(0)}</strong>.<br>
@@ -2639,13 +2639,13 @@ async function handleCreateBetSubmit(e) {
         
         const overrides = {};
         document.querySelectorAll('.bulk-amount-override').forEach(inp => {
-            overrides[inp.getAttribute('data-player')] = parseFloat(inp.value) || 5.0;
+            overrides[inp.getAttribute('data-player')] = parseFloat(inp.value) || 1.0;
         });
         
         let successCount = 0;
         for (let i = 0; i < opponents.length; i++) {
             const opp = opponents[i];
-            const amount = overrides[opp] || 5.0;
+            const amount = overrides[opp] || 1.0;
             
             status.innerHTML = `<span style="color: var(--text-secondary);">⏳ Logging bet ${i+1} of ${opponents.length} against ${opp}...</span>`;
             
