@@ -1942,10 +1942,60 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// ----------------- 🎰 GAMBLING PROBLEM SOUNDBOARD -----------------
+const GAMBLING_PROBLEM_LINES = [
+    "Congratulations. Gamblers Anonymous meets Tuesdays.",
+    "A wise man once said: don't bet. You are not a wise man.",
+    "Your wallet just filed a restraining order.",
+    "At this rate, you'll be accepting Venmo requests from your dog.",
+    "Fun fact: the house always wins. You are not the house.",
+    "This bet has been auto-enrolled in the twelve step program.",
+    "Sir, this is a Wendy's. And also an intervention.",
+    "Your future self just winced.",
+    "Bold strategy. Statistically speaking, terrible strategy.",
+    "Are you okay? Blink twice if you need help.",
+    "The person who invented gambling is laughing right now. At you.",
+    "Bet placed. Dignity: pending.",
+    "This message is sponsored by your children's college fund.",
+    "I believe in you. I also believe pigs will fly. Same odds.",
+    "Another one? Your liver AND your wallet are scared.",
+    "You are what economists call a net negative.",
+    "Have you considered literally any other hobby?",
+    "Bet confirmed. Therapy hotline: 1-800-not-again.",
+    "Somewhere, a casino executive just smiled and didn't know why.",
+    "If losing were an Olympic sport, you'd finally medal.",
+    "You heard 'side bet' and physically could not stop yourself. Iconic.",
+];
+
+function playGamblingProblemLine() {
+    if (!window.speechSynthesis) return;
+    const line = GAMBLING_PROBLEM_LINES[Math.floor(Math.random() * GAMBLING_PROBLEM_LINES.length)];
+    const utterance = new SpeechSynthesisUtterance(line);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    // Prefer a voice that sounds punchy — pick a local English voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v =>
+        v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Alex') || v.name.includes('Daniel'))
+    ) || voices.find(v => v.lang.startsWith('en')) || null;
+    if (preferred) utterance.voice = preferred;
+
+    window.speechSynthesis.cancel(); // stop anything already playing
+    window.speechSynthesis.speak(utterance);
+}
+
+// Ensure voices are loaded (some browsers are async about this)
+if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
 // ----------------- 🎰 SIDE BETS WIDGET & DATABASE INTEGRATION -----------------
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_zeLW5C3JN5n9VtOSiIobG15J_wRoLltG4jCIEv8xUEbO4SRKDead9hjq8pgKMB1AKg/exec';
 let currentBetsSubTab = 'active';
 let sideBetsData = [];
+let oddsEnabled = false;
 
 // Fetch and parse Side Bets database from Google Sheets
 async function loadSideBets() {
@@ -1967,6 +2017,8 @@ async function loadSideBets() {
     const winnerIdx = headers.indexOf('Winner');
     const paidIdx = headers.indexOf('Paid');
     const timeIdx = headers.indexOf('Timestamp');
+    const oddsIdx = headers.indexOf('Odds');
+    const oddsRatioIdx = headers.indexOf('OddsRatio');
     
     sideBetsData = dataRows.map(row => {
         return {
@@ -1979,7 +2031,9 @@ async function loadSideBets() {
             quote: row[quoteIdx],
             winner: row[winnerIdx] || 'Pending',
             paid: row[paidIdx] || 'No',
-            timestamp: row[timeIdx]
+            timestamp: row[timeIdx],
+            odds: oddsIdx !== -1 ? (parseFloat(row[oddsIdx]) || 1.0) : 1.0,
+            oddsRatio: oddsRatioIdx !== -1 ? (row[oddsRatioIdx] || '1:1') : '1:1'
         };
     }).filter(b => b.id); // ignore empty rows
     
@@ -2160,6 +2214,11 @@ async function renderActiveBets(container) {
         
         let winnerText = b.winner === 'Pending' ? '' : `<div style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Winner: ${b.winner}</div>`;
         
+        let oddsDisplay = '';
+        if (b.odds && parseFloat(b.odds) !== 1.0) {
+            oddsDisplay = `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 700; margin-left: 0.4rem; padding: 0.15rem 0.35rem; background: hsla(180, 100%, 48%, 0.1); border-radius: 4px; border: 1px solid hsla(180, 100%, 48%, 0.2);">🎲 ${b.oddsRatio || (b.odds.toFixed(1) + ':1')}</span>`;
+        }
+        
         html += `
             <div class="bet-card ${statusClass}" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
                 <div class="bet-header">
@@ -2174,7 +2233,7 @@ async function renderActiveBets(container) {
                 ${winnerText}
                 <div class="bet-details-row">
                     <span class="bet-event">${eventLabel}</span>
-                    <span class="bet-amount">$${b.amount.toFixed(0)}</span>
+                    <span class="bet-amount">$${b.amount.toFixed(0)}${oddsDisplay}</span>
                 </div>
                 ${dateStr ? `<div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.7; display: flex; align-items: center; gap: 0.25rem; margin-top: -0.5rem; margin-bottom: 0.25rem;">📅 Created: ${dateStr}</div>` : ''}
                 ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
@@ -2188,6 +2247,7 @@ async function renderActiveBets(container) {
 
 // Render Create Bet Form
 function renderCreateBetForm(container) {
+    oddsEnabled = false; // reset when opening form
     const names = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
     
     let playerAOptions = '';
@@ -2253,10 +2313,10 @@ function renderCreateBetForm(container) {
                         <label style="color: var(--accent-gold); font-weight: 700;">👥 Team Wager Mode</label>
                         <div style="display: flex; gap: 1.5rem; margin-top: 0.4rem;">
                             <label style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; cursor: pointer;">
-                                <input type="radio" name="wager-split" value="Per Person" checked> Per Person
+                                <input type="radio" name="wager-split" value="Per Person" onchange="updateOddsPreview()" checked> Per Person
                             </label>
                             <label style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; cursor: pointer;">
-                                <input type="radio" name="wager-split" value="Split"> Total Pot Split
+                                <input type="radio" name="wager-split" value="Split" onchange="updateOddsPreview()"> Total Pot Split
                             </label>
                         </div>
                         <span style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.4rem; display: block; line-height: 1.3;">
@@ -2269,7 +2329,7 @@ function renderCreateBetForm(container) {
                 <div id="bulk-mode-fields" style="display: none; margin-bottom: 1.25rem;">
                     <div class="form-group" style="margin-bottom: 1.25rem;">
                         <label for="bet-player-a">Your Name (Player A) *</label>
-                        <select class="form-select" id="bet-player-a">
+                        <select class="form-select" id="bet-player-a" onchange="updateOddsPreview()">
                             ${playerAOptions}
                         </select>
                     </div>
@@ -2311,8 +2371,27 @@ function renderCreateBetForm(container) {
                 </div>
                 
                 <div class="form-group" id="group-normal-amount">
-                    <label for="bet-amount">Wager Amount ($) *</label>
-                    <input type="number" class="form-input" id="bet-amount" min="1" max="10000" placeholder="e.g. 5, 20, 100" required>
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <label for="bet-amount">Wager Amount ($) *</label>
+                        <button type="button" id="toggle-odds-btn" onclick="toggleOddsFields()" style="background: none; border: none; color: var(--accent-cyan); font-weight: 700; font-size: 0.85rem; cursor: pointer; padding: 0;">Need Odds? 🎲</button>
+                    </div>
+                    <input type="number" class="form-input" id="bet-amount" min="1" max="10000" placeholder="e.g. 5, 20, 100" oninput="updateOddsPreview()" required>
+                </div>
+
+                <div id="odds-fields-group" style="display: none; background: hsla(180, 100%, 48%, 0.05); padding: 0.75rem; border-radius: 8px; border: 1px dashed var(--border-color); margin-bottom: 1.25rem; flex-direction: column; gap: 0.5rem;">
+                    <label style="color: var(--accent-cyan); font-weight: 700; display: flex; align-items: center; gap: 0.25rem;">
+                        🎲 Asymmetric Odds Config
+                    </label>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                        <span>Side A gets</span>
+                        <input type="number" id="odds-numerator" class="form-input" value="2" min="1" style="width: 60px; padding: 0.3rem; text-align: center;" oninput="updateOddsPreview()">
+                        <span>to</span>
+                        <input type="number" id="odds-denominator" class="form-input" value="1" min="1" style="width: 60px; padding: 0.3rem; text-align: center;" oninput="updateOddsPreview()">
+                        <span>odds</span>
+                    </div>
+                    <div id="odds-math-preview" style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-top: 0.25rem;">
+                        <!-- Updated dynamically -->
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -2345,6 +2424,7 @@ function toggleBulkMode(isBulk) {
         if (bulkFields) bulkFields.style.display = 'none';
         if (normalAmount) normalAmount.style.display = 'flex';
         if (amountInput) amountInput.setAttribute('required', 'true');
+        updateOddsPreview();
     }
 }
 
@@ -2360,6 +2440,7 @@ function evaluateTeamMode() {
             splitGroup.style.display = 'none';
         }
     }
+    updateOddsPreview();
 }
 
 function handleBulkOpponentChange() {
@@ -2371,6 +2452,7 @@ function handleBulkOpponentChange() {
     
     if (checkedOpponents.length === 0) {
         configGroup.style.display = 'none';
+        updateOddsPreview();
         return;
     }
     
@@ -2389,12 +2471,13 @@ function handleBulkOpponentChange() {
                 <span style="font-weight: 600; font-size: 0.9rem;">${p}</span>
                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                     <span style="color: var(--text-secondary); font-size: 0.9rem;">$</span>
-                    <input type="number" class="form-input bulk-amount-override" data-player="${p}" value="${val}" min="1" max="10000" style="width: 70px; padding: 0.3rem 0.5rem; text-align: center;">
+                    <input type="number" class="form-input bulk-amount-override" data-player="${p}" value="${val}" min="1" max="10000" style="width: 70px; padding: 0.3rem 0.5rem; text-align: center;" oninput="updateOddsPreview()">
                 </div>
             </div>
         `;
     });
     inputsDiv.innerHTML = html;
+    updateOddsPreview();
 }
 
 function toggleBetTypeFields(val) {
@@ -2406,6 +2489,103 @@ function toggleBetTypeFields(val) {
     } else {
         if (cupGroup) cupGroup.style.display = 'none';
         if (customGroup) customGroup.style.display = 'flex';
+    }
+}
+
+function toggleOddsFields() {
+    const group = document.getElementById('odds-fields-group');
+    const btn = document.getElementById('toggle-odds-btn');
+    if (!group || !btn) return;
+    
+    oddsEnabled = !oddsEnabled;
+    if (oddsEnabled) {
+        group.style.display = 'flex';
+        btn.textContent = 'Remove Odds ❌';
+    } else {
+        group.style.display = 'none';
+        btn.textContent = 'Need Odds? 🎲';
+    }
+    updateOddsPreview();
+}
+
+function updateOddsPreview() {
+    const isBulk = document.getElementById('bet-bulk-mode')?.checked || false;
+    const numVal = parseFloat(document.getElementById('odds-numerator')?.value) || 1;
+    const denVal = parseFloat(document.getElementById('odds-denominator')?.value) || 1;
+    
+    const previewDiv = document.getElementById('odds-math-preview');
+    if (!previewDiv) return;
+    
+    if (!oddsEnabled || numVal <= 0 || denVal <= 0) {
+        previewDiv.innerHTML = '';
+        return;
+    }
+    
+    const multiplier = numVal / denVal;
+    
+    if (isBulk) {
+        const playerA = document.getElementById('bet-player-a')?.value || 'Player A';
+        const opponents = Array.from(document.querySelectorAll('.bet-bulk-opp-check:checked')).map(c => c.value);
+        if (opponents.length === 0) {
+            previewDiv.innerHTML = '💡 <em>Select opponents to see payout breakdown.</em>';
+            return;
+        }
+        
+        const overrides = {};
+        document.querySelectorAll('.bulk-amount-override').forEach(inp => {
+            overrides[inp.getAttribute('data-player')] = parseFloat(inp.value) || 5.0;
+        });
+        
+        let previewHtml = `💡 <strong>Odds Ratio:</strong> ${numVal}:${denVal} (${multiplier.toFixed(2)}x payout)<br>`;
+        opponents.forEach(opp => {
+            const amount = overrides[opp] || 5.0;
+            const winAmount = amount * multiplier;
+            previewHtml += `
+                • Against <strong>${opp}</strong> (stake: $${amount.toFixed(0)}): If ${playerA} wins &rarr; wins <strong>$${winAmount.toFixed(0)}</strong>. If ${opp} wins &rarr; wins <strong>$${amount.toFixed(0)}</strong>.<br>
+            `;
+        });
+        previewDiv.innerHTML = previewHtml;
+    } else {
+        const amountVal = parseFloat(document.getElementById('bet-amount')?.value) || 0;
+        if (amountVal <= 0) {
+            previewDiv.innerHTML = '💡 <em>Enter a wager amount to see payout breakdown.</em>';
+            return;
+        }
+        
+        const sideA = Array.from(document.querySelectorAll('.bet-side-a-check:checked')).map(c => c.value);
+        const sideB = Array.from(document.querySelectorAll('.bet-side-b-check:checked')).map(c => c.value);
+        
+        const sideALabel = sideA.length > 0 ? sideA.join(', ') : 'Side A';
+        const sideBLabel = sideB.length > 0 ? sideB.join(', ') : 'Side B';
+        
+        const winAmount = amountVal * multiplier;
+        const isSplit = document.querySelector('input[name="wager-split"]:checked')?.value === 'Split';
+        
+        let previewText = '';
+        if (sideA.length > 1 || sideB.length > 1) {
+            if (isSplit) {
+                previewText = `
+                    💡 <strong>Odds Ratio:</strong> ${numVal}:${denVal} (${multiplier.toFixed(2)}x payout)<br>
+                    🟢 If <strong>${sideALabel}</strong> wins: They split a total payout of <strong>$${winAmount.toFixed(0)}</strong> (paid by ${sideBLabel}).<br>
+                    🔴 If <strong>${sideBLabel}</strong> wins: They split a total payout of <strong>$${amountVal.toFixed(0)}</strong> (paid by ${sideALabel}).
+                `;
+            } else {
+                const totalAWin = winAmount * sideB.length;
+                const totalBWin = amountVal * sideA.length;
+                previewText = `
+                    💡 <strong>Odds Ratio:</strong> ${numVal}:${denVal} (${multiplier.toFixed(2)}x payout)<br>
+                    🟢 If <strong>${sideALabel}</strong> wins: Each player on ${sideALabel} wins $${winAmount.toFixed(0)} from each player on ${sideBLabel} (total of <strong>$${totalAWin.toFixed(0)}</strong> collected).<br>
+                    🔴 If <strong>${sideBLabel}</strong> wins: Each player on ${sideBLabel} wins $${amountVal.toFixed(0)} from each player on ${sideA} (total of <strong>$${totalBWin.toFixed(0)}</strong> collected).
+                `;
+            }
+        } else {
+            previewText = `
+                💡 <strong>Odds Ratio:</strong> ${numVal}:${denVal} (${multiplier.toFixed(2)}x payout)<br>
+                🟢 If <strong>${sideALabel}</strong> wins: <strong>${sideBLabel}</strong> pays them <strong>$${winAmount.toFixed(0)}</strong>.<br>
+                🔴 If <strong>${sideBLabel}</strong> wins: <strong>${sideALabel}</strong> pays them <strong>$${amountVal.toFixed(0)}</strong>.
+            `;
+        }
+        previewDiv.innerHTML = previewText;
     }
 }
 
@@ -2426,6 +2606,17 @@ async function handleCreateBetSubmit(e) {
         if (!eventName.trim()) {
             alert("Please enter a custom game name.");
             return;
+        }
+    }
+
+    let oddsVal = 1.0;
+    let oddsRatioStr = '1:1';
+    if (oddsEnabled) {
+        const num = parseFloat(document.getElementById('odds-numerator').value) || 1;
+        const den = parseFloat(document.getElementById('odds-denominator').value) || 1;
+        if (num > 0 && den > 0) {
+            oddsVal = num / den;
+            oddsRatioStr = num + ':' + den;
         }
     }
     
@@ -2465,7 +2656,9 @@ async function handleCreateBetSubmit(e) {
                 type: type,
                 event: eventName,
                 amount: amount,
-                quote: quote
+                quote: quote,
+                odds: oddsVal,
+                oddsRatio: oddsRatioStr
             };
             
             try {
@@ -2485,6 +2678,7 @@ async function handleCreateBetSubmit(e) {
         
         if (successCount === opponents.length) {
             status.innerHTML = `<span style="color: var(--accent-green); font-weight: 700;">✅ All ${opponents.length} bets logged successfully!</span>`;
+            playGamblingProblemLine();
         } else {
             status.innerHTML = `<span style="color: var(--accent-gold); font-weight: 700;">⚠️ Logged ${successCount} of ${opponents.length} bets. Some failed.</span>`;
         }
@@ -2527,7 +2721,9 @@ async function handleCreateBetSubmit(e) {
             type: finalType,
             event: eventName,
             amount: amount,
-            quote: quote
+            quote: quote,
+            odds: oddsVal,
+            oddsRatio: oddsRatioStr
         };
         
         try {
@@ -2541,6 +2737,7 @@ async function handleCreateBetSubmit(e) {
             delete googleSheetsCache['SIDE_BETS'];
             
             status.innerHTML = '<span style="color: var(--accent-green); font-weight: 700;">✅ Team Bet Logged Successfully!</span>';
+            playGamblingProblemLine();
             setTimeout(() => {
                 switchBetsSubTab('active');
             }, 1200);
@@ -2596,15 +2793,18 @@ async function renderHistoryBets(container) {
         const sideAWins = (winnerStr === b.playerA.trim() || sideA.includes(winnerStr));
         const sideBWins = (winnerStr === b.playerB.trim() || sideB.includes(winnerStr));
         
+        const oddsVal = b.odds ? parseFloat(b.odds) : 1.0;
+        
         if (sideAWins) {
+            const payout = amount * oddsVal;
             if (isSplit) {
-                const winShare = amount / sideA.length;
-                const loseShare = amount / sideB.length;
+                const winShare = payout / sideA.length;
+                const loseShare = payout / sideB.length;
                 sideA.forEach(p => netEarnings[p] += winShare);
                 sideB.forEach(p => netEarnings[p] -= loseShare);
             } else {
-                sideA.forEach(p => netEarnings[p] += amount * sideB.length);
-                sideB.forEach(p => netEarnings[p] -= amount * sideA.length);
+                sideA.forEach(p => netEarnings[p] += payout * sideB.length);
+                sideB.forEach(p => netEarnings[p] -= payout * sideA.length);
             }
         } else if (sideBWins) {
             if (isSplit) {
@@ -2679,6 +2879,12 @@ async function renderHistoryBets(container) {
         completedBets.forEach(b => {
             let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
             let dateStr = formatBetDate(b.timestamp);
+            
+            let oddsDisplay = '';
+            if (b.odds && parseFloat(b.odds) !== 1.0) {
+                oddsDisplay = `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 700; margin-left: 0.4rem; padding: 0.15rem 0.35rem; background: hsla(180, 100%, 48%, 0.1); border-radius: 4px; border: 1px solid hsla(180, 100%, 48%, 0.2);">🎲 ${b.oddsRatio || (b.odds.toFixed(1) + ':1')}</span>`;
+            }
+            
             statsHtml += `
                 <div class="bet-card completed-bet" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
                     <div class="bet-header">
@@ -2693,7 +2899,7 @@ async function renderHistoryBets(container) {
                     <div style="color: var(--accent-green); font-weight: 700; margin-top: 0.25rem;">🏆 Winner: ${b.winner}</div>
                     <div class="bet-details-row">
                         <span class="bet-event">${eventLabel}</span>
-                        <span class="bet-amount" style="color: var(--text-secondary);">$${b.amount.toFixed(0)}</span>
+                        <span class="bet-amount" style="color: var(--text-secondary);">$${b.amount.toFixed(0)}${oddsDisplay}</span>
                     </div>
                     ${dateStr ? `<div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.6; display: flex; align-items: center; gap: 0.25rem; margin-top: -0.5rem; margin-bottom: 0.25rem;">📅 Created: ${dateStr}</div>` : ''}
                     ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
@@ -2814,6 +3020,43 @@ function showBetDetails(id) {
             <span style="color: var(--accent-green); font-weight: 800; font-size: 1.1rem;">🏆 Winner: ${b.winner}</span>
         </div>
     `;
+
+    let oddsBlockHtml = '';
+    if (b.odds && parseFloat(b.odds) !== 1.0) {
+        const winAmount = b.amount * parseFloat(b.odds);
+        
+        let sideALabel = sideA.length > 0 ? sideA.join(', ') : 'Side A';
+        let sideBLabel = sideB.length > 0 ? sideB.join(', ') : 'Side B';
+        
+        let payoutDetails = '';
+        if (sideA.length > 1 || sideB.length > 1) {
+            if (isSplit) {
+                payoutDetails = `
+                    • If <strong>${sideALabel}</strong> wins: They split a total payout of <strong>$${winAmount.toFixed(0)}</strong> (paid by ${sideBLabel}).<br>
+                    • If <strong>${sideBLabel}</strong> wins: They split a total payout of <strong>$${b.amount.toFixed(0)}</strong> (paid by ${sideALabel}).
+                `;
+            } else {
+                const totalAWin = winAmount * sideB.length;
+                const totalBWin = b.amount * sideA.length;
+                payoutDetails = `
+                    • If <strong>${sideALabel}</strong> wins: Each player on ${sideALabel} wins $${winAmount.toFixed(0)} from each player on ${sideBLabel} (total of <strong>$${totalAWin.toFixed(0)}</strong> collected).<br>
+                    • If <strong>${sideBLabel}</strong> wins: Each player on ${sideBLabel} wins $${b.amount.toFixed(0)} from each player on ${sideA} (total of <strong>$${totalBWin.toFixed(0)}</strong> collected).
+                `;
+            }
+        } else {
+            payoutDetails = `
+                • If <strong>${sideALabel}</strong> wins: <strong>${sideBLabel}</strong> pays them <strong>$${winAmount.toFixed(0)}</strong>.<br>
+                • If <strong>${sideBLabel}</strong> wins: <strong>${sideALabel}</strong> pays them <strong>$${b.amount.toFixed(0)}</strong>.
+            `;
+        }
+        
+        oddsBlockHtml = `
+            <div style="background: hsla(180, 100%, 48%, 0.05); border: 1px dashed var(--accent-cyan); padding: 0.75rem 0.9rem; border-radius: 12px; font-size: 0.85rem; line-height: 1.4; margin-bottom: 1rem;">
+                <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.25rem;">🎲 Asymmetric Odds Terms (${b.oddsRatio || (b.odds.toFixed(1) + ':1')})</div>
+                <div style="color: var(--text-secondary);">${payoutDetails}</div>
+            </div>
+        `;
+    }
     
     const inner = document.getElementById('bet-details-inner');
     inner.innerHTML = `
@@ -2848,6 +3091,8 @@ function showBetDetails(id) {
                 <span class="sports-stat-val" style="font-size: 0.95rem; font-weight: 700; margin-top: 0.2rem; text-transform: none;">${modeLabel}</span>
             </div>
         </div>
+        
+        ${oddsBlockHtml}
         
         <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.95rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
             <div><span style="color: var(--text-secondary); font-weight: 600;">Game/Event:</span> <span style="font-weight: 700; color: var(--text-primary);">${b.event}</span></div>
