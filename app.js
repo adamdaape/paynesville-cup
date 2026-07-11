@@ -1996,6 +1996,7 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_zeLW5C3JN5n9
 let currentBetsSubTab = 'active';
 let sideBetsData = [];
 let oddsEnabled = false;
+let wagerMode = 'single'; // 'single' | 'bulk' | 'group'
 
 // Fetch and parse Side Bets database from Google Sheets
 async function loadSideBets() {
@@ -2017,23 +2018,50 @@ async function loadSideBets() {
     const winnerIdx = headers.indexOf('Winner');
     const paidIdx = headers.indexOf('Paid');
     const timeIdx = headers.indexOf('Timestamp');
-    const oddsIdx = headers.indexOf('Odds');
-    const oddsRatioIdx = headers.indexOf('OddsRatio');
     
     sideBetsData = dataRows.map(row => {
+        let rawWinner = row[winnerIdx] || 'Pending';
+        let cleanWinner = rawWinner;
+        let paidPlayers = [];
+        if (rawWinner.includes('|| PAID:')) {
+            const parts = rawWinner.split('|| PAID:');
+            cleanWinner = parts[0].trim();
+            const paidPlayersStr = parts[1].trim();
+            paidPlayers = paidPlayersStr ? paidPlayersStr.split(',').map(n => n.trim()) : [];
+        }
+        
+        let rawType = row[typeIdx] || '';
+        let cleanType = rawType;
+        let oddsVal = 1.0;
+        let oddsRatioStr = '1:1';
+        if (rawType && rawType.includes('(')) {
+            const match = rawType.match(/(.*?)\s*\((\d+(?:\.\d+)?):(\d+(?:\.\d+)?)\)/);
+            if (match) {
+                cleanType = match[1].trim();
+                const num = parseFloat(match[2]);
+                const den = parseFloat(match[3]);
+                if (num > 0 && den > 0) {
+                    oddsVal = num / den;
+                    oddsRatioStr = num + ':' + den;
+                }
+            }
+        }
+        
         return {
             id: row[idIdx],
             playerA: row[pAIdx],
             playerB: row[pBIdx],
-            type: row[typeIdx],
+            type: cleanType,
             event: row[eventIdx],
             amount: parseFloat(row[amountIdx]) || 0.0,
             quote: row[quoteIdx],
-            winner: row[winnerIdx] || 'Pending',
+            winner: cleanWinner,
             paid: row[paidIdx] || 'No',
             timestamp: row[timeIdx],
-            odds: oddsIdx !== -1 ? (parseFloat(row[oddsIdx]) || 1.0) : 1.0,
-            oddsRatio: oddsRatioIdx !== -1 ? (row[oddsRatioIdx] || '1:1') : '1:1'
+            odds: oddsVal,
+            oddsRatio: oddsRatioStr,
+            paidPlayers: paidPlayers,
+            rawWinner: rawWinner
         };
     }).filter(b => b.id); // ignore empty rows
     
@@ -2190,50 +2218,94 @@ async function renderActiveBets(container) {
     
     let html = `<div class="bets-grid">`;
     activeBets.forEach(b => {
+        const isGroup = b.type === 'Group Pot';
+        const participants = isGroup ? b.playerA.split(',').map(n => n.trim()).filter(n => n) : [];
+        
         let statusClass = b.winner === 'Pending' ? 'active-bet' : 'resolved-unpaid';
         let statusLabel = b.winner === 'Pending' ? 'Active' : 'Resolved — Awaiting Cash Payout';
         let badgeClass = b.winner === 'Pending' ? 'pending' : 'unpaid';
         
-        let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
+        let eventLabel = isGroup ? `🎮 ${b.event}` : (b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`);
         let dateStr = formatBetDate(b.timestamp);
         
         let actionHtml = '';
-        if (b.winner === 'Pending') {
-            actionHtml = `
-                <div class="bet-actions">
-                    <button class="bet-btn resolve" onclick="event.stopPropagation(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
-                </div>
-            `;
+        if (isGroup) {
+            if (b.winner === 'Pending') {
+                actionHtml = `
+                    <div class="bet-actions">
+                        <button class="bet-btn resolve" onclick="event.stopPropagation(); showSettleGroupModal('${b.id}')">🎯 Settle Winner(s)</button>
+                    </div>
+                `;
+            } else {
+                actionHtml = `
+                    <div class="bet-actions">
+                        <button class="bet-btn paid-btn" onclick="event.stopPropagation(); showBetDetails('${b.id}')">💵 Collect Cash Checklist</button>
+                    </div>
+                `;
+            }
         } else {
-            actionHtml = `
-                <div class="bet-actions">
-                    <button class="bet-btn paid-btn" onclick="event.stopPropagation(); triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
-                </div>
-            `;
+            if (b.winner === 'Pending') {
+                actionHtml = `
+                    <div class="bet-actions">
+                        <button class="bet-btn resolve" onclick="event.stopPropagation(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
+                    </div>
+                `;
+            } else {
+                actionHtml = `
+                    <div class="bet-actions">
+                        <button class="bet-btn paid-btn" onclick="event.stopPropagation(); triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
+                    </div>
+                `;
+            }
         }
         
         let winnerText = b.winner === 'Pending' ? '' : `<div style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Winner: ${b.winner}</div>`;
+        
+        // Checklist summary for Group Pots
+        let checklistSummary = '';
+        if (isGroup && b.winner !== 'Pending') {
+            const paidCount = b.paidPlayers.length;
+            const totalCount = participants.length;
+            checklistSummary = `<div style="font-size: 0.8rem; color: var(--accent-gold); font-weight: 700; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.25rem;">💵 Collected: ${paidCount} / ${totalCount} paid</div>`;
+        }
         
         let oddsDisplay = '';
         if (b.odds && parseFloat(b.odds) !== 1.0) {
             oddsDisplay = `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 700; margin-left: 0.4rem; padding: 0.15rem 0.35rem; background: hsla(180, 100%, 48%, 0.1); border-radius: 4px; border: 1px solid hsla(180, 100%, 48%, 0.2);">🎲 ${b.oddsRatio || (b.odds.toFixed(1) + ':1')}</span>`;
         }
         
-        html += `
-            <div class="bet-card ${statusClass}" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
-                <div class="bet-header">
-                    <span>${b.type} Bet</span>
-                    <span class="bet-status-badge ${badgeClass}">${statusLabel}</span>
+        let matchupHtml = '';
+        if (isGroup) {
+            matchupHtml = `
+                <div style="display: flex; flex-direction: column; width: 100%; text-align: left; margin: 0.5rem 0;">
+                    <span style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;">👥 Group Pot</span>
+                    <span style="font-size: 0.82rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.2rem;" title="${b.playerA}">${b.playerA}</span>
                 </div>
+            `;
+        } else {
+            matchupHtml = `
                 <div class="bet-matchup">
                     <span class="bet-player" title="${b.playerA}">${b.playerA}</span>
                     <span class="bet-vs">VS</span>
                     <span class="bet-player" style="text-align: right;" title="${b.playerB}">${b.playerB}</span>
                 </div>
+            `;
+        }
+        
+        let amountValDisplay = isGroup ? `$${b.amount.toFixed(0)} buy-in (Pot: $${(b.amount * participants.length).toFixed(0)})` : `$${b.amount.toFixed(0)}`;
+        
+        html += `
+            <div class="bet-card ${statusClass}" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
+                <div class="bet-header">
+                    <span>${isGroup ? 'Group' : b.type} Bet</span>
+                    <span class="bet-status-badge ${badgeClass}">${statusLabel}</span>
+                </div>
+                ${matchupHtml}
                 ${winnerText}
+                ${checklistSummary}
                 <div class="bet-details-row">
                     <span class="bet-event">${eventLabel}</span>
-                    <span class="bet-amount">$${b.amount.toFixed(0)}${oddsDisplay}</span>
+                    <span class="bet-amount">${amountValDisplay}${oddsDisplay}</span>
                 </div>
                 ${dateStr ? `<div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.7; display: flex; align-items: center; gap: 0.25rem; margin-top: -0.5rem; margin-bottom: 0.25rem;">📅 Created: ${dateStr}</div>` : ''}
                 ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
@@ -2248,6 +2320,7 @@ async function renderActiveBets(container) {
 // Render Create Bet Form
 function renderCreateBetForm(container) {
     oddsEnabled = false; // reset when opening form
+    wagerMode = 'single';
     const names = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
     
     let playerAOptions = '';
@@ -2263,6 +2336,7 @@ function renderCreateBetForm(container) {
     let sideACheckboxes = '';
     let sideBCheckboxes = '';
     let bulkOpponentCheckboxes = '';
+    let groupPlayerCheckboxes = '';
     
     names.forEach((n, idx) => {
         sideACheckboxes += `
@@ -2280,15 +2354,21 @@ function renderCreateBetForm(container) {
                 <input type="checkbox" class="bet-bulk-opp-check" value="${n}" onchange="handleBulkOpponentChange()"> ${n}
             </label>
         `;
+        groupPlayerCheckboxes += `
+            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
+                <input type="checkbox" class="bet-group-player-check" value="${n}" onchange="updateGroupPotPreview()"> ${n}
+            </label>
+        `;
     });
     
     let html = `
         <div class="card bet-form-card">
             <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.5rem; margin-bottom: 1.5rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">🎰 Create a Side Bet</h3>
             
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; background: hsla(222, 20%, 25%, 0.3); padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-color);">
-                <input type="checkbox" id="bet-bulk-mode" onchange="toggleBulkMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
-                <label for="bet-bulk-mode" style="cursor: pointer; user-select: none; font-weight: 700; color: var(--accent-cyan); font-size: 0.95rem;">🎰 Multiple Opponents (Bulk Mode)</label>
+            <div class="wager-mode-select" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; width: 100%;">
+                <button type="button" class="wager-mode-btn" id="mode-btn-single" onclick="switchWagerMode('single')" style="flex: 1; padding: 0.6rem 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-sidebar); color: var(--text-secondary); font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.2s;">👤 Single / Team</button>
+                <button type="button" class="wager-mode-btn" id="mode-btn-bulk" onclick="switchWagerMode('bulk')" style="flex: 1; padding: 0.6rem 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-sidebar); color: var(--text-secondary); font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.2s;">🎰 Bulk 1v1s</button>
+                <button type="button" class="wager-mode-btn" id="mode-btn-group" onclick="switchWagerMode('group')" style="flex: 1; padding: 0.6rem 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-sidebar); color: var(--text-secondary); font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.2s;">👥 Group Pot</button>
             </div>
             
             <form id="create-bet-form" onsubmit="handleCreateBetSubmit(event)">
@@ -2349,6 +2429,18 @@ function renderCreateBetForm(container) {
                     </div>
                 </div>
                 
+                <div id="group-mode-fields" style="display: none; margin-bottom: 1.25rem;">
+                    <div class="form-group">
+                        <label>Group Participants (Select all playing) *</label>
+                        <div style="max-height: 140px; overflow-y: auto; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 0.25rem;">
+                            ${groupPlayerCheckboxes}
+                        </div>
+                    </div>
+                    <div id="group-pot-preview" style="font-size: 0.9rem; color: var(--accent-cyan); font-weight: 700; margin-top: -0.5rem; margin-bottom: 1rem;">
+                        <!-- Calculated dynamically -->
+                    </div>
+                </div>
+                
                 <div class="form-group" style="margin-top: 1.25rem;">
                     <label for="bet-type">Wager Type *</label>
                     <select class="form-select" id="bet-type" onchange="toggleBetTypeFields(this.value)" required>
@@ -2372,10 +2464,10 @@ function renderCreateBetForm(container) {
                 
                 <div class="form-group" id="group-normal-amount">
                     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <label for="bet-amount">Wager Amount ($) *</label>
+                        <label for="bet-amount" id="wager-amount-label">Wager Amount ($) *</label>
                         <button type="button" id="toggle-odds-btn" onclick="toggleOddsFields()" style="background: none; border: none; color: var(--accent-cyan); font-weight: 700; font-size: 0.85rem; cursor: pointer; padding: 0;">Need Odds? 🎲</button>
                     </div>
-                    <input type="number" class="form-input" id="bet-amount" min="1" max="10000" placeholder="e.g. 5, 20, 100" oninput="updateOddsPreview()" required>
+                    <input type="number" class="form-input" id="bet-amount" min="1" max="10000" placeholder="e.g. 5, 20, 100" oninput="updateOddsPreview(); updateGroupPotPreview()" required>
                 </div>
 
                 <div id="odds-fields-group" style="display: none; background: hsla(180, 100%, 48%, 0.05); padding: 0.75rem; border-radius: 8px; border: 1px dashed var(--border-color); margin-bottom: 1.25rem; flex-direction: column; gap: 0.5rem;">
@@ -2405,6 +2497,7 @@ function renderCreateBetForm(container) {
         </div>
     `;
     container.innerHTML = html;
+    switchWagerMode('single');
 }
 
 function toggleBulkMode(isBulk) {
@@ -2509,7 +2602,14 @@ function toggleOddsFields() {
 }
 
 function updateOddsPreview() {
-    const isBulk = document.getElementById('bet-bulk-mode')?.checked || false;
+    const isBulk = (wagerMode === 'bulk');
+    const isGroup = (wagerMode === 'group');
+    if (isGroup) {
+        const previewDiv = document.getElementById('odds-math-preview');
+        if (previewDiv) previewDiv.innerHTML = '';
+        return;
+    }
+    
     const numVal = parseFloat(document.getElementById('odds-numerator')?.value) || 1;
     const denVal = parseFloat(document.getElementById('odds-denominator')?.value) || 1;
     
@@ -2589,11 +2689,92 @@ function updateOddsPreview() {
     }
 }
 
+function switchWagerMode(mode) {
+    wagerMode = mode;
+    
+    // Update active button styles
+    document.querySelectorAll('.wager-mode-btn').forEach(btn => {
+        btn.style.background = 'var(--bg-sidebar)';
+        btn.style.borderColor = 'var(--border-color)';
+        btn.style.color = 'var(--text-secondary)';
+    });
+    
+    const activeBtn = document.getElementById(`mode-btn-${mode}`);
+    if (activeBtn) {
+        activeBtn.style.background = 'linear-gradient(135deg, hsla(180, 100%, 48%, 0.15), hsla(222, 20%, 25%, 0.3))';
+        activeBtn.style.borderColor = 'var(--accent-cyan)';
+        activeBtn.style.color = 'var(--text-primary)';
+    }
+    
+    const normalFields = document.getElementById('normal-mode-fields');
+    const bulkFields = document.getElementById('bulk-mode-fields');
+    const groupFields = document.getElementById('group-mode-fields');
+    const normalAmount = document.getElementById('group-normal-amount');
+    const amountLabel = document.getElementById('wager-amount-label');
+    const amountInput = document.getElementById('bet-amount');
+    const oddsToggleBtn = document.getElementById('toggle-odds-btn');
+    
+    if (mode === 'single') {
+        if (normalFields) normalFields.style.display = 'block';
+        if (bulkFields) bulkFields.style.display = 'none';
+        if (groupFields) groupFields.style.display = 'none';
+        if (normalAmount) normalAmount.style.display = 'block';
+        if (amountLabel) amountLabel.textContent = 'Wager Amount ($) *';
+        if (amountInput) amountInput.setAttribute('required', 'true');
+        if (oddsToggleBtn) oddsToggleBtn.style.display = 'block';
+    } else if (mode === 'bulk') {
+        if (normalFields) normalFields.style.display = 'none';
+        if (bulkFields) bulkFields.style.display = 'block';
+        if (groupFields) groupFields.style.display = 'none';
+        if (normalAmount) normalAmount.style.display = 'none';
+        if (amountInput) amountInput.removeAttribute('required');
+        if (oddsToggleBtn) oddsToggleBtn.style.display = 'block';
+        handleBulkOpponentChange();
+    } else if (mode === 'group') {
+        if (normalFields) normalFields.style.display = 'none';
+        if (bulkFields) bulkFields.style.display = 'none';
+        if (groupFields) groupFields.style.display = 'block';
+        if (normalAmount) normalAmount.style.display = 'block';
+        if (amountLabel) amountLabel.textContent = 'Entry Fee per Person ($) *';
+        if (amountInput) amountInput.setAttribute('required', 'true');
+        
+        // Hide odds for group pot
+        if (oddsToggleBtn) oddsToggleBtn.style.display = 'none';
+        if (oddsEnabled) {
+            toggleOddsFields();
+        }
+        
+        updateGroupPotPreview();
+    }
+    
+    updateOddsPreview();
+}
+
+function updateGroupPotPreview() {
+    const checked = Array.from(document.querySelectorAll('.bet-group-player-check:checked')).map(c => c.value);
+    const amountVal = parseFloat(document.getElementById('bet-amount')?.value) || 0;
+    const previewDiv = document.getElementById('group-pot-preview');
+    if (!previewDiv) return;
+    
+    if (wagerMode !== 'group') {
+        previewDiv.innerHTML = '';
+        return;
+    }
+    
+    const count = checked.length;
+    const totalPot = count * amountVal;
+    
+    if (count > 0) {
+        previewDiv.innerHTML = `👥 Total Players: ${count} &middot; 💰 Total Pot: $${totalPot.toFixed(0)}`;
+    } else {
+        previewDiv.innerHTML = '👥 <em>Select players to calculate total pot.</em>';
+    }
+}
+
 async function handleCreateBetSubmit(e) {
     e.preventDefault();
     const btn = document.getElementById('btn-submit-bet');
     const status = document.getElementById('bet-submit-status');
-    const isBulk = document.getElementById('bet-bulk-mode').checked;
     
     const type = document.getElementById('bet-type').value;
     const quote = document.getElementById('bet-quote').value;
@@ -2611,7 +2792,7 @@ async function handleCreateBetSubmit(e) {
 
     let oddsVal = 1.0;
     let oddsRatioStr = '1:1';
-    if (oddsEnabled) {
+    if (oddsEnabled && wagerMode !== 'group') {
         const num = parseFloat(document.getElementById('odds-numerator').value) || 1;
         const den = parseFloat(document.getElementById('odds-denominator').value) || 1;
         if (num > 0 && den > 0) {
@@ -2620,7 +2801,57 @@ async function handleCreateBetSubmit(e) {
         }
     }
     
-    if (isBulk) {
+    if (wagerMode === 'group') {
+        const groupPlayers = Array.from(document.querySelectorAll('.bet-group-player-check:checked')).map(c => c.value);
+        if (groupPlayers.length < 2) {
+            alert("Please select at least 2 participants for the Group Pot.");
+            return;
+        }
+        
+        const amount = document.getElementById('bet-amount').value;
+        if (!amount || parseFloat(amount) <= 0) {
+            alert("Please enter a valid entry fee.");
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Submitting Group Pot...';
+        status.style.display = 'block';
+        status.innerHTML = '<span style="color: var(--text-secondary);">Sending group bet to Google Sheet...</span>';
+        
+        const payload = {
+            action: 'create',
+            playerA: groupPlayers.join(', '),
+            playerB: 'Group Pot',
+            type: 'Group Pot',
+            event: eventName,
+            amount: amount,
+            quote: quote
+        };
+        
+        try {
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(payload)
+            });
+            
+            delete googleSheetsCache['SIDE_BETS'];
+            
+            status.innerHTML = '<span style="color: var(--accent-green); font-weight: 700;">✅ Group Pot Logged Successfully!</span>';
+            playGamblingProblemLine();
+            setTimeout(() => {
+                switchBetsSubTab('active');
+            }, 1200);
+        } catch (err) {
+            console.error("Error submitting group pot:", err);
+            status.innerHTML = `<span style="color: var(--accent-red);">⚠️ Error: ${err.message}. Please check connection.</span>`;
+            btn.disabled = false;
+            btn.innerHTML = '🎰 Create Side Bet';
+        }
+        
+    } else if (wagerMode === 'bulk') {
         const playerA = document.getElementById('bet-player-a').value;
         const opponents = Array.from(document.querySelectorAll('.bet-bulk-opp-check:checked')).map(c => c.value);
         
@@ -2653,12 +2884,10 @@ async function handleCreateBetSubmit(e) {
                 action: 'create',
                 playerA: playerA,
                 playerB: opp,
-                type: type,
+                type: oddsEnabled ? `${type} (${oddsRatioStr})` : type,
                 event: eventName,
                 amount: amount,
-                quote: quote,
-                odds: oddsVal,
-                oddsRatio: oddsRatioStr
+                quote: quote
             };
             
             try {
@@ -2718,12 +2947,10 @@ async function handleCreateBetSubmit(e) {
             action: 'create',
             playerA: sideA.join(', '),
             playerB: sideB.join(', '),
-            type: finalType,
+            type: oddsEnabled ? `${finalType} (${oddsRatioStr})` : finalType,
             event: eventName,
             amount: amount,
-            quote: quote,
-            odds: oddsVal,
-            oddsRatio: oddsRatioStr
+            quote: quote
         };
         
         try {
@@ -2789,6 +3016,23 @@ async function renderHistoryBets(container) {
         sideB.forEach(p => { if (netEarnings[p] === undefined) netEarnings[p] = 0; });
         
         if (winnerStr === 'Tie') return;
+        
+        if (b.type === 'Group Pot') {
+            const winners = winnerStr.split(',').map(n => n.trim()).filter(n => n);
+            if (winners.length === 0 || winners.includes('Pending')) return;
+            
+            const totalPot = sideA.length * amount;
+            const winShare = totalPot / winners.length;
+            
+            sideA.forEach(p => {
+                if (winners.includes(p)) {
+                    netEarnings[p] += (winShare - amount);
+                } else {
+                    netEarnings[p] -= amount;
+                }
+            });
+            return;
+        }
         
         const sideAWins = (winnerStr === b.playerA.trim() || sideA.includes(winnerStr));
         const sideBWins = (winnerStr === b.playerB.trim() || sideB.includes(winnerStr));
@@ -2877,7 +3121,10 @@ async function renderHistoryBets(container) {
     } else {
         statsHtml += `<div class="bets-grid">`;
         completedBets.forEach(b => {
-            let eventLabel = b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`;
+            const isGroup = b.type === 'Group Pot';
+            const participants = isGroup ? b.playerA.split(',').map(n => n.trim()).filter(n => n) : [];
+            
+            let eventLabel = isGroup ? `🎮 ${b.event}` : (b.type === 'Cup' ? `🏆 ${b.event}` : `🎮 ${b.event}`);
             let dateStr = formatBetDate(b.timestamp);
             
             let oddsDisplay = '';
@@ -2885,21 +3132,37 @@ async function renderHistoryBets(container) {
                 oddsDisplay = `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 700; margin-left: 0.4rem; padding: 0.15rem 0.35rem; background: hsla(180, 100%, 48%, 0.1); border-radius: 4px; border: 1px solid hsla(180, 100%, 48%, 0.2);">🎲 ${b.oddsRatio || (b.odds.toFixed(1) + ':1')}</span>`;
             }
             
-            statsHtml += `
-                <div class="bet-card completed-bet" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
-                    <div class="bet-header">
-                        <span>${b.type} Bet</span>
-                        <span class="bet-status-badge paid">Settled & Paid</span>
+            let matchupHtml = '';
+            if (isGroup) {
+                matchupHtml = `
+                    <div style="display: flex; flex-direction: column; width: 100%; text-align: left; margin: 0.5rem 0;">
+                        <span style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;">👥 Group Pot</span>
+                        <span style="font-size: 0.82rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.2rem;" title="${b.playerA}">${b.playerA}</span>
                     </div>
+                `;
+            } else {
+                matchupHtml = `
                     <div class="bet-matchup">
                         <span class="bet-player" title="${b.playerA}">${b.playerA}</span>
                         <span class="bet-vs">VS</span>
                         <span class="bet-player" style="text-align: right;" title="${b.playerB}">${b.playerB}</span>
                     </div>
+                `;
+            }
+            
+            let amountValDisplay = isGroup ? `$${b.amount.toFixed(0)} buy-in (Pot: $${(b.amount * participants.length).toFixed(0)})` : `$${b.amount.toFixed(0)}`;
+            
+            statsHtml += `
+                <div class="bet-card completed-bet" onclick="showBetDetails('${b.id}')" style="cursor: pointer;">
+                    <div class="bet-header">
+                        <span>${isGroup ? 'Group' : b.type} Bet</span>
+                        <span class="bet-status-badge paid">Settled & Paid</span>
+                    </div>
+                    ${matchupHtml}
                     <div style="color: var(--accent-green); font-weight: 700; margin-top: 0.25rem;">🏆 Winner: ${b.winner}</div>
                     <div class="bet-details-row">
                         <span class="bet-event">${eventLabel}</span>
-                        <span class="bet-amount" style="color: var(--text-secondary);">$${b.amount.toFixed(0)}${oddsDisplay}</span>
+                        <span class="bet-amount" style="color: var(--text-secondary);">${amountValDisplay}${oddsDisplay}</span>
                     </div>
                     ${dateStr ? `<div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.6; display: flex; align-items: center; gap: 0.25rem; margin-top: -0.5rem; margin-bottom: 0.25rem;">📅 Created: ${dateStr}</div>` : ''}
                     ${b.quote ? `<div class="bet-quote-bubble">"${b.quote}"</div>` : ''}
@@ -2986,43 +3249,62 @@ function showBetDetails(id) {
     const b = sideBetsData.find(x => x.id === id);
     if (!b) return;
     
+    const isGroup = b.type === 'Group Pot';
     const sideA = b.playerA.split(',').map(n => n.trim()).filter(n => n);
     const sideB = b.playerB.split(',').map(n => n.trim()).filter(n => n);
     
-    let sideAHtml = sideA.map(name => `
-        <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-color);" onclick="closeBetDetails(); showPlayerCard('${name.replace(/'/g, "\\'")}')">👤 ${name}</div>
-    `).join('');
+    let sideAHtml = '';
+    let sideBHtml = '';
+    let groupParticipantsHtml = '';
     
-    let sideBHtml = sideB.map(name => `
-        <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-color);" onclick="closeBetDetails(); showPlayerCard('${name.replace(/'/g, "\\'")}')">👤 ${name}</div>
-    `).join('');
+    if (isGroup) {
+        groupParticipantsHtml = sideA.map(name => `
+            <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-color); text-align: center; margin-bottom: 0.25rem;" onclick="closeBetDetails(); showPlayerCard('${name.replace(/'/g, "\\'")}')">👤 ${name}</div>
+        `).join('');
+    } else {
+        sideAHtml = sideA.map(name => `
+            <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-color);" onclick="closeBetDetails(); showPlayerCard('${name.replace(/'/g, "\\'")}')">👤 ${name}</div>
+        `).join('');
+        
+        sideBHtml = sideB.map(name => `
+            <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-color);" onclick="closeBetDetails(); showPlayerCard('${name.replace(/'/g, "\\'")}')">👤 ${name}</div>
+        `).join('');
+    }
     
     let isSplit = b.type.endsWith('(Split)');
-    let modeLabel = isSplit ? 'Total Pot Split 👥' : 'Per Person 💵';
+    let modeLabel = isGroup ? 'Group Pot 👥' : (isSplit ? 'Total Pot Split 👥' : 'Per Person 💵');
     let statusLabel = b.paid === 'Yes' ? 'Settled & Paid' : b.winner !== 'Pending' ? 'Resolved — Awaiting Payout' : 'Active Wager';
     let dateStr = formatBetDate(b.timestamp);
     
     let actionHtml = '';
     if (b.paid !== 'Yes') {
         if (b.winner === 'Pending') {
-            actionHtml = `
-                <button class="bet-btn resolve" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
-            `;
+            if (isGroup) {
+                actionHtml = `
+                    <button class="bet-btn resolve" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); showSettleGroupModal('${b.id}')">🎯 Settle Winner(s)</button>
+                `;
+            } else {
+                actionHtml = `
+                    <button class="bet-btn resolve" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
+                `;
+            }
         } else {
-            actionHtml = `
-                <button class="bet-btn paid-btn" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
-            `;
+            if (!isGroup) {
+                actionHtml = `
+                    <button class="bet-btn paid-btn" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); triggerMarkPaid('${b.id}')">💵 Mark Paid & Completed</button>
+                `;
+            }
         }
     }
     
     let winnerHtml = b.winner === 'Pending' ? '' : `
         <div style="background: hsla(145, 80%, 45%, 0.08); border: 1px solid var(--accent-green); padding: 0.75rem; border-radius: 12px; text-align: center; margin-top: 0.5rem; margin-bottom: 0.5rem;">
-            <span style="color: var(--accent-green); font-weight: 800; font-size: 1.1rem;">🏆 Winner: ${b.winner}</span>
+            <span style="color: var(--accent-green); font-weight: 800; font-size: 1.1rem;">🏆 Winner${b.winner.includes(',') ? 's' : ''}: ${b.winner}</span>
         </div>
     `;
 
     let oddsBlockHtml = '';
-    if (b.odds && parseFloat(b.odds) !== 1.0) {
+    if (b.odds && parseFloat(b.odds) !== 1.0 && !isGroup) {
         const winAmount = b.amount * parseFloat(b.odds);
         
         let sideALabel = sideA.length > 0 ? sideA.join(', ') : 'Side A';
@@ -3057,6 +3339,73 @@ function showBetDetails(id) {
             </div>
         `;
     }
+
+    // Matchup/participants card block
+    let matchupCardHtml = '';
+    if (isGroup) {
+        matchupCardHtml = `
+            <div style="background: hsla(222, 20%, 15%, 0.5); padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px; text-align: center;">Group Participants</div>
+                ${groupParticipantsHtml}
+            </div>
+        `;
+    } else {
+        matchupCardHtml = `
+            <div style="background: hsla(222, 20%, 15%, 0.5); padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.4rem; text-align: center;">
+                    <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Side A</div>
+                    ${sideAHtml}
+                </div>
+                
+                <div style="text-align: center; font-weight: 800; color: var(--text-secondary); font-size: 0.9rem; margin: 0.25rem 0;">⚡ VS ⚡</div>
+                
+                <div style="display: flex; flex-direction: column; gap: 0.4rem; text-align: center;">
+                    <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Side B</div>
+                    ${sideBHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    // Group payment checklist
+    let groupChecklistHtml = '';
+    if (isGroup && b.winner !== 'Pending' && b.paid !== 'Yes') {
+        groupChecklistHtml = `
+            <div style="margin-top: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-bottom: 1rem;">
+                <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--accent-gold); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 0.5rem; text-align: center;">💵 Cash Payout Checklist</div>
+                <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        `;
+        
+        sideA.forEach(p => {
+            const isWinner = b.winner.split(',').map(n => n.trim()).includes(p);
+            const hasPaid = b.paidPlayers.includes(p);
+            const labelSuffix = isWinner ? ' <span style="color: var(--accent-green); font-size: 0.75rem;">(Winner)</span>' : '';
+            
+            const checkedAttr = hasPaid ? 'checked' : '';
+            const statusText = hasPaid ? '<span style="color: var(--accent-green); font-size: 0.8rem; font-weight: 700;">Paid</span>' : '<span style="color: var(--text-secondary); font-size: 0.8rem;">Click to check</span>';
+            
+            groupChecklistHtml += `
+                <div onclick="toggleGroupPlayerPayment('${b.id}', '${p.replace(/'/g, "\\'")}')" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.8rem; background: hsla(222, 20%, 15%, 0.3); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; transition: background 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+                        <input type="checkbox" ${checkedAttr} onclick="event.stopPropagation(); toggleGroupPlayerPayment('${b.id}', '${p.replace(/'/g, "\\'")}')" style="width: 16px; height: 16px; cursor: pointer;">
+                        <span>${p}${labelSuffix}</span>
+                    </div>
+                    ${statusText}
+                </div>
+            `;
+        });
+        
+        groupChecklistHtml += `
+                </div>
+                <span style="font-size: 0.73rem; color: var(--text-secondary); margin-top: 0.6rem; display: block; text-align: center; line-height: 1.3;">
+                    * Check off players as they pay cash. The bet settles automatically when everyone is checked.
+                </span>
+            </div>
+        `;
+    }
+    
+    let wagerLabel = isGroup ? 'BUY-IN' : 'WAGER';
+    let amountValDisplay = `$${b.amount.toFixed(0)}`;
     
     const inner = document.getElementById('bet-details-inner');
     inner.innerHTML = `
@@ -3065,26 +3414,14 @@ function showBetDetails(id) {
             <div class="card-nickname" style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Status: ${statusLabel}</div>
         </div>
         
-        <div style="background: hsla(222, 20%, 15%, 0.5); padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
-            <div style="display: flex; flex-direction: column; gap: 0.4rem; text-align: center;">
-                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Side A</div>
-                ${sideAHtml}
-            </div>
-            
-            <div style="text-align: center; font-weight: 800; color: var(--text-secondary); font-size: 0.9rem; margin: 0.25rem 0;">⚡ VS ⚡</div>
-            
-            <div style="display: flex; flex-direction: column; gap: 0.4rem; text-align: center;">
-                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Side B</div>
-                ${sideBHtml}
-            </div>
-        </div>
+        ${matchupCardHtml}
         
         ${winnerHtml}
         
         <div class="sports-stats-grid" style="grid-template-columns: 1fr 1fr; margin-top: 0.5rem; margin-bottom: 1rem;">
             <div class="sports-stat-col" style="background: hsla(222, 20%, 15%, 0.4); padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-color);">
-                <span class="sports-stat-lbl">WAGER</span>
-                <span class="sports-stat-val" style="color: var(--accent-gold); font-size: 1.3rem;">$${b.amount.toFixed(0)}</span>
+                <span class="sports-stat-lbl">${wagerLabel}</span>
+                <span class="sports-stat-val" style="color: var(--accent-gold); font-size: 1.3rem;">${amountValDisplay}</span>
             </div>
             <div class="sports-stat-col" style="background: hsla(222, 20%, 15%, 0.4); padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-color);">
                 <span class="sports-stat-lbl">MODE</span>
@@ -3093,6 +3430,8 @@ function showBetDetails(id) {
         </div>
         
         ${oddsBlockHtml}
+        
+        ${groupChecklistHtml}
         
         <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.95rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
             <div><span style="color: var(--text-secondary); font-weight: 600;">Game/Event:</span> <span style="font-weight: 700; color: var(--text-primary);">${b.event}</span></div>
@@ -3116,4 +3455,122 @@ function closeBetDetails(event) {
     if (event) event.stopPropagation();
     const modal = document.getElementById('bet-details-modal');
     if (modal) modal.classList.remove('active');
+}
+
+// Show Settle Group Pot Modal
+function showSettleGroupModal(id) {
+    const b = sideBetsData.find(x => x.id === id);
+    if (!b) return;
+    
+    const participants = b.playerA.split(',').map(n => n.trim()).filter(n => n);
+    
+    let checklistHtml = '';
+    participants.forEach((p, idx) => {
+        checklistHtml += `
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <input type="checkbox" class="settle-winner-check" value="${p}" style="width: 18px; height: 18px;"> ${p}
+            </label>
+        `;
+    });
+    
+    const inner = document.getElementById('settle-group-inner');
+    inner.innerHTML = `
+        <div class="card-header-block" style="margin-bottom: 0.5rem;">
+            <div class="card-name" style="font-size: 1.4rem;">🎯 Settle Group Pot</div>
+            <div class="card-nickname" style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Select Winner(s) (supports split pots)</div>
+        </div>
+        
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+            Game: <strong>${b.event}</strong> &middot; Pot size: <strong>$${(b.amount * participants.length).toFixed(0)}</strong>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 240px; overflow-y: auto; padding-right: 0.25rem;">
+            ${checklistHtml}
+        </div>
+        
+        <button class="action-btn" onclick="confirmSettleGroup('${b.id}')" style="width: 100%; padding: 0.8rem; border-radius: 12px; font-weight: 700; margin-top: 0.5rem;">🎯 Confirm Winner(s)</button>
+    `;
+    
+    document.getElementById('settle-group-modal').classList.add('active');
+}
+
+function closeSettleGroup(event) {
+    if (event) event.stopPropagation();
+    const modal = document.getElementById('settle-group-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function confirmSettleGroup(id) {
+    const checked = Array.from(document.querySelectorAll('.settle-winner-check:checked')).map(c => c.value);
+    if (checked.length === 0) {
+        alert("Please select at least one winner.");
+        return;
+    }
+    
+    const winnerString = checked.join(', ');
+    closeSettleGroup();
+    
+    // We update the winner cell to "Winners || PAID: " (initially empty payment list)
+    executeBetAction({
+        action: 'resolve',
+        id: id,
+        winner: winnerString + " || PAID: "
+    });
+}
+
+async function toggleGroupPlayerPayment(betId, playerName) {
+    const b = sideBetsData.find(x => x.id === betId);
+    if (!b) return;
+    
+    let paidPlayers = [...(b.paidPlayers || [])];
+    const idx = paidPlayers.indexOf(playerName);
+    if (idx === -1) {
+        paidPlayers.push(playerName);
+    } else {
+        paidPlayers.splice(idx, 1);
+    }
+    
+    const participants = b.playerA.split(',').map(n => n.trim()).filter(n => n);
+    const allPaid = participants.every(p => paidPlayers.includes(p));
+    
+    const newWinnerCellValue = b.winner + " || PAID: " + paidPlayers.join(', ');
+    
+    delete googleSheetsCache['SIDE_BETS'];
+    
+    const container = document.getElementById('bet-details-inner');
+    if (container) {
+        container.innerHTML = `
+            <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                <span class="loading-spinner">⏳</span> Updating payment checklist in Google Sheets...
+            </div>
+        `;
+    }
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'resolve', id: betId, winner: newWinnerCellValue })
+        });
+        
+        if (allPaid) {
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'markPaid', id: betId })
+            });
+        }
+        
+        // Reload Board
+        setTimeout(() => {
+            closeBetDetails();
+            renderSideBetsBoard();
+        }, 1000);
+    } catch (e) {
+        console.error("Group payment toggle failed:", e);
+        alert("Failed to update payment checklist: " + e.message);
+        renderSideBetsBoard();
+    }
 }

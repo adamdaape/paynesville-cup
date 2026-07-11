@@ -161,11 +161,22 @@ Read the live leaderboards, bubble watches, and matchups here:
         </div>
     </div>
 
+    <!-- Settle Group Pot Modal Overlay -->
+    <div class="modal-overlay" id="settle-group-modal" onclick="closeSettleGroup(event)">
+        <div class="player-card" id="settle-group-container" onclick="event.stopPropagation()">
+            <button class="close-card-btn" onclick="closeSettleGroup(event)">×</button>
+            <div class="card-glow"></div>
+            <div class="card-inner" id="settle-group-inner" style="display: flex; flex-direction: column; gap: 1rem;">
+                <!-- Dynamically populated checklist of players and resolve button -->
+            </div>
+        </div>
+    </div>
+
     <!-- Mobile Bottom Navigation Bar (hidden on desktop via CSS) -->
     <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
         <button class="mobile-nav-btn active" id="mobile-btn-lifetime" onclick="switchTab('lifetime')">
             <span class="mobile-nav-icon">📈</span>
-            <span class="mobile-nav-label">Standings</span>
+            <span class="mobile-nav-label">All Time</span>
         </button>
         <button class="mobile-nav-btn" id="mobile-btn-yearly" onclick="switchTab('yearly')">
             <span class="mobile-nav-icon">📅</span>
@@ -185,7 +196,7 @@ Read the live leaderboards, bubble watches, and matchups here:
         </button>
         <button class="mobile-nav-btn" id="mobile-btn-bets" onclick="switchTab('bets')">
             <span class="mobile-nav-icon">🎰</span>
-            <span class="mobile-nav-label">Side Bets</span>
+            <span class="mobile-nav-label">Bets</span>
         </button>
     </nav>
 

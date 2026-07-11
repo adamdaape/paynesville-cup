@@ -722,16 +722,20 @@ body {
 
     /* ----- Year/Tournament filter buttons: bigger tap targets ----- */
     .tab-filters {
-        flex-wrap: wrap;
-        gap: 0.35rem;
-        padding: 0.3rem;
+        flex-wrap: nowrap;
+        gap: 0.2rem;
+        padding: 0.25rem;
+        width: 100%;
+        justify-content: space-between;
     }
 
     .filter-btn {
-        padding: 0.6rem 0.875rem;
-        font-size: 0.8rem;
-        min-height: 40px;
-        min-width: 52px;
+        padding: 0.45rem 0.55rem;
+        font-size: 0.78rem;
+        min-height: 36px;
+        min-width: unset;
+        flex: 1;
+        text-align: center;
     }
 
     .dropdown-select {
