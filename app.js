@@ -22,6 +22,11 @@ let sortAscending = false; // Default: Descending (highest points first)
 let yearlySortKey = 'Cup Points'; // Default sort key for yearly
 let yearlySortAscending = false; // Default: Descending
 
+// Check-In global variables
+let checkInSessionsData = [];
+let checkInPlayersData = [];
+let activeCheckInSession = null;
+
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', () => {
     fetchCupData();
@@ -381,6 +386,22 @@ function switchTab(tabName) {
     if (filterContainer) filterContainer.style.display = 'none';
     if (tournamentFilterContainer) tournamentFilterContainer.style.display = 'none';
     if (highlightsContainer) highlightsContainer.style.display = 'none';
+    
+    // Toggle check-in widget & default widgets
+    const defaultWidgets = document.getElementById('default-widgets');
+    const checkinWidget = document.getElementById('checkin-widget-container');
+    if (tabName === 'tournaments') {
+        if (defaultWidgets) defaultWidgets.style.display = 'none';
+        if (checkinWidget) {
+            checkinWidget.style.display = 'block';
+            renderCheckInWidget();
+        }
+        activeCheckInSession = null;
+        loadCheckInSessions();
+    } else {
+        if (defaultWidgets) defaultWidgets.style.display = 'block';
+        if (checkinWidget) checkinWidget.style.display = 'none';
+    }
     
     // Restore the main data table structure if coming from the rivalry or bets tab
     const tableContainer = document.getElementById('leaderboard-table-container');
@@ -891,6 +912,9 @@ async function renderTournamentTable() {
     
     html += `</tbody>`;
     table.innerHTML = html;
+    
+    // Render winnings leaderboard at the bottom of the tournament standings
+    renderWinningsLeaderboard();
 }
 
 // ----------------- RENDER VEGAS ODDS BOARD -----------------
@@ -1992,7 +2016,7 @@ if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefin
 }
 
 // ----------------- 🎰 SIDE BETS WIDGET & DATABASE INTEGRATION -----------------
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_zeLW5C3JN5n9VtOSiIobG15J_wRoLltG4jCIEv8xUEbO4SRKDead9hjq8pgKMB1AKg/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzD4j1ZhOdJcNug0Kuyjj-jPRvUKKCsgPl-NIDGRcgOVgdo9vx_FD44xoYy6cipB7hnA/exec';
 let currentBetsSubTab = 'active';
 let sideBetsData = [];
 let oddsEnabled = false;
@@ -3012,8 +3036,8 @@ async function renderHistoryBets(container) {
         
         const isSplit = b.type.endsWith('(Split)');
         
-        sideA.forEach(p => { if (netEarnings[p] === undefined) netEarnings[p] = 0; });
-        sideB.forEach(p => { if (netEarnings[p] === undefined) netEarnings[p] = 0; });
+        sideA.forEach(p => { if (p !== 'Group Pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
+        sideB.forEach(p => { if (p !== 'Group Pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
         
         if (winnerStr === 'Tie') return;
         
@@ -3066,6 +3090,7 @@ async function renderHistoryBets(container) {
     let leaderboard = Object.entries(netEarnings)
         .map(([name, val]) => ({ name, val }))
         .filter(item => {
+            if (item.name === 'Group Pot') return false;
             if (item.val !== 0) return true;
             return sideBetsData.some(b => {
                 const sA = b.playerA.split(',').map(n => n.trim());
@@ -3382,23 +3407,22 @@ function showBetDetails(id) {
             const labelSuffix = isWinner ? ' <span style="color: var(--accent-green); font-size: 0.75rem;">(Winner)</span>' : '';
             
             const checkedAttr = hasPaid ? 'checked' : '';
-            const statusText = hasPaid ? '<span style="color: var(--accent-green); font-size: 0.8rem; font-weight: 700;">Paid</span>' : '<span style="color: var(--text-secondary); font-size: 0.8rem;">Click to check</span>';
             
             groupChecklistHtml += `
-                <div onclick="toggleGroupPlayerPayment('${b.id}', '${p.replace(/'/g, "\\'")}')" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.8rem; background: hsla(222, 20%, 15%, 0.3); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; transition: background 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 600;">
-                        <input type="checkbox" ${checkedAttr} onclick="event.stopPropagation(); toggleGroupPlayerPayment('${b.id}', '${p.replace(/'/g, "\\'")}')" style="width: 16px; height: 16px; cursor: pointer;">
+                <div style="display: flex; align-items: center; padding: 0.6rem 0.8rem; background: hsla(222, 20%, 15%, 0.3); border: 1px solid var(--border-color); border-radius: 10px; transition: background 0.2s;">
+                    <label style="display: flex; align-items: center; gap: 0.4rem; font-weight: 600; cursor: pointer; width: 100%;">
+                        <input type="checkbox" class="group-payment-check" ${checkedAttr} value="${p.replace(/"/g, '&quot;')}" style="width: 16px; height: 16px; cursor: pointer;">
                         <span>${p}${labelSuffix}</span>
-                    </div>
-                    ${statusText}
+                    </label>
                 </div>
             `;
         });
         
         groupChecklistHtml += `
                 </div>
+                <button class="action-btn" onclick="saveGroupPlayerPayments('${b.id}')" style="width: 100%; margin-top: 0.8rem; padding: 0.6rem; border-radius: 10px; font-weight: 700; font-size: 0.9rem;">💾 Save Payments</button>
                 <span style="font-size: 0.73rem; color: var(--text-secondary); margin-top: 0.6rem; display: block; text-align: center; line-height: 1.3;">
-                    * Check off players as they pay cash. The bet settles automatically when everyone is checked.
+                    * Check off players as they pay cash, then click Save. The bet settles automatically when everyone has paid.
                 </span>
             </div>
         `;
@@ -3518,17 +3542,12 @@ async function confirmSettleGroup(id) {
     });
 }
 
-async function toggleGroupPlayerPayment(betId, playerName) {
+async function saveGroupPlayerPayments(betId) {
     const b = sideBetsData.find(x => x.id === betId);
     if (!b) return;
     
-    let paidPlayers = [...(b.paidPlayers || [])];
-    const idx = paidPlayers.indexOf(playerName);
-    if (idx === -1) {
-        paidPlayers.push(playerName);
-    } else {
-        paidPlayers.splice(idx, 1);
-    }
+    const checkboxes = Array.from(document.querySelectorAll('.group-payment-check'));
+    const paidPlayers = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
     
     const participants = b.playerA.split(',').map(n => n.trim()).filter(n => n);
     const allPaid = participants.every(p => paidPlayers.includes(p));
@@ -3569,8 +3588,857 @@ async function toggleGroupPlayerPayment(betId, playerName) {
             renderSideBetsBoard();
         }, 1000);
     } catch (e) {
-        console.error("Group payment toggle failed:", e);
+        console.error("Group payment save failed:", e);
         alert("Failed to update payment checklist: " + e.message);
         renderSideBetsBoard();
     }
 }
+
+// ----------------- 🎟️ TOURNAMENT CHECK-IN & SESSION MANAGEMENT -----------------
+let checkInLoading = false;
+let checkInPayoutsData = [];
+
+// Fetch and load sessions from Google Sheets
+async function loadCheckInSessions() {
+    checkInLoading = true;
+    try {
+        // Clear caches to force fresh fetch
+        delete googleSheetsCache['CHECK_IN_SESSIONS'];
+        delete googleSheetsCache['CHECK_IN'];
+        delete googleSheetsCache['PAYOUTS'];
+        
+        const sessRows = await fetchGoogleSheetCSV('CHECK_IN_SESSIONS');
+        const checkInRows = await fetchGoogleSheetCSV('CHECK_IN');
+        const payoutRows = await fetchGoogleSheetCSV('PAYOUTS');
+
+        if (sessRows && sessRows.length > 1) {
+            const headers = sessRows[0].map(h => h.trim());
+            const dataRows = sessRows.slice(1);
+            
+            const idIdx = headers.indexOf('Session ID');
+            const tourneyIdx = headers.indexOf('Tournament');
+            const yearIdx = headers.indexOf('Year');
+            const feeIdx = headers.indexOf('Entry Fee');
+            const targetIdx = headers.indexOf('Bounty Target');
+            const amtIdx = headers.indexOf('Bounty Amount');
+            const winnerIdx = headers.indexOf('Bounty Winner');
+            const statusIdx = headers.indexOf('Status');
+            const timeIdx = headers.indexOf('Created At');
+            
+            checkInSessionsData = dataRows.map(row => ({
+                sessionId: row[idIdx],
+                tournament: row[tourneyIdx],
+                year: parseInt(row[yearIdx]) || 2026,
+                entryFee: parseFloat(row[feeIdx]) || 0.0,
+                bountyTarget: row[targetIdx] || '',
+                bountyAmount: parseFloat(row[amtIdx]) || 0.0,
+                bountyWinner: row[winnerIdx] || '',
+                status: row[statusIdx] || 'draft',
+                createdAt: row[timeIdx]
+            })).filter(s => s.sessionId);
+        } else {
+            checkInSessionsData = [];
+        }
+
+        if (checkInRows && checkInRows.length > 1) {
+            const headers = checkInRows[0].map(h => h.trim());
+            const dataRows = checkInRows.slice(1);
+            
+            const sIdIdx = headers.indexOf('Session ID');
+            const tourneyIdx = headers.indexOf('Tournament');
+            const yearIdx = headers.indexOf('Year');
+            const playerIdx = headers.indexOf('Player');
+            const feePaidIdx = headers.indexOf('Entry Fee Paid');
+            const freeIdx = headers.indexOf('Free Entry');
+            const removedIdx = headers.indexOf('Removed');
+            const timeIdx = headers.indexOf('Checked In At');
+            
+            checkInPlayersData = dataRows.map(row => ({
+                sessionId: row[sIdIdx],
+                tournament: row[tourneyIdx],
+                year: parseInt(row[yearIdx]) || 2026,
+                player: row[playerIdx],
+                entryFeePaid: parseFloat(row[feePaidIdx]) || 0.0,
+                freeEntry: row[freeIdx] || '',
+                removed: row[removedIdx] || '',
+                checkedInAt: row[timeIdx]
+            })).filter(ci => ci.sessionId && ci.player && ci.removed !== 'Yes');
+        } else {
+            checkInPlayersData = [];
+        }
+        
+        if (payoutRows && payoutRows.length > 1) {
+            const headers = payoutRows[0].map(h => h.trim());
+            const dataRows = payoutRows.slice(1);
+            
+            const sIdIdx = headers.indexOf('Session ID');
+            const tourneyIdx = headers.indexOf('Tournament');
+            const yearIdx = headers.indexOf('Year');
+            const playerIdx = headers.indexOf('Player');
+            const amountIdx = headers.indexOf('Amount Won');
+            const typeIdx = headers.indexOf('Payout Type');
+            const timeIdx = headers.indexOf('Timestamp');
+            
+            checkInPayoutsData = dataRows.map(row => ({
+                sessionId: row[sIdIdx],
+                tournament: row[tourneyIdx],
+                year: parseInt(row[yearIdx]) || 2026,
+                player: row[playerIdx],
+                amountWon: parseFloat(row[amountIdx]) || 0.0,
+                payoutType: row[typeIdx],
+                timestamp: row[timeIdx]
+            })).filter(p => p.sessionId && p.player);
+        } else {
+            checkInPayoutsData = [];
+        }
+
+    } catch (e) {
+        console.error("Error loading check-in data:", e);
+    } finally {
+        checkInLoading = false;
+        renderCheckInWidget();
+        if (activeCheckInSession) {
+            renderActiveSession(activeCheckInSession);
+        }
+        // If we are on the tournaments tab and not in an active session, render the tournaments leaderboard and the winnings ledger underneath
+        if (currentTab === 'tournaments' && !activeCheckInSession) {
+            renderTournamentTable();
+        }
+    }
+}
+
+// Render check-in widget in sidebar
+function renderCheckInWidget() {
+    const container = document.getElementById('checkin-widget-container');
+    if (!container) return;
+    
+    if (checkInLoading && checkInSessionsData.length === 0) {
+        container.innerHTML = `
+            <div class="card widget-card">
+                <div class="card-header"><h3>🎟️ Event Check-In</h3></div>
+                <div class="widget-body" style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">
+                    <span class="loading-spinner">⏳</span> Loading sessions...
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    let activeSessionsHtml = '';
+    const activeSessions = checkInSessionsData.filter(s => s.status !== 'complete');
+    
+    if (activeSessions.length > 0) {
+        activeSessions.forEach(s => {
+            const participants = checkInPlayersData.filter(p => p.sessionId === s.sessionId);
+            const totalCollected = participants.reduce((sum, p) => sum + p.entryFeePaid, 0);
+            const activePool = totalCollected - s.bountyAmount;
+            const formattedDate = formatBetDate(s.createdAt) || 'Recent';
+            
+            activeSessionsHtml += `
+                <div onclick="openCheckInSession('${s.sessionId}')" style="padding: 0.6rem 0.8rem; background: hsla(222, 20%, 15%, 0.4); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; transition: border-color 0.2s; text-align: left; display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">
+                        <span>🏆 ${s.tournament}</span>
+                        <span style="color: var(--accent-cyan); font-size: 0.75rem; text-transform: uppercase;">${s.status}</span>
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); display: flex; justify-content: space-between;">
+                        <span>Pool: $${activePool.toFixed(0)} (${participants.length} in)</span>
+                        <span>${formattedDate}</span>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        activeSessionsHtml = `
+            <p style="font-style: italic; color: var(--text-secondary); font-size: 0.82rem; padding: 0.5rem 0; text-align: center;">
+                No active event check-ins.
+            </p>
+        `;
+    }
+    
+    container.innerHTML = `
+        <div class="card widget-card">
+            <div class="card-header">
+                <h3>🎟️ Event Check-In</h3>
+            </div>
+            <div class="widget-body">
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                    Create a check-in sheet, track director free entries, bounties, and overall prize pools.
+                </p>
+                <button class="action-btn" onclick="showCreateSessionModal()" style="width: 100%; margin-bottom: 1.25rem;">➕ Create Event</button>
+                
+                <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--accent-gold); letter-spacing: 0.5px; margin-bottom: 0.5rem; font-weight: 700;">Active Sessions</h4>
+                <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem;">
+                    ${activeSessionsHtml}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function showCreateSessionModal() {
+    const modal = document.getElementById('create-session-modal');
+    if (!modal) return;
+    
+    // Populate tournament dropdown
+    const select = document.getElementById('session-tournament-select');
+    if (select && select.children.length === 0) {
+        MAIN_TOURNAMENTS.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            select.appendChild(opt);
+        });
+    }
+    
+    // Populate bounty target dropdown
+    const targetSelect = document.getElementById('session-bounty-target-select');
+    if (targetSelect) {
+        targetSelect.innerHTML = '<option value="">-- None --</option>';
+        const names = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
+        names.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            targetSelect.appendChild(opt);
+        });
+    }
+    
+    modal.classList.add('active');
+}
+
+function closeCreateSessionModal(event) {
+    if (event) event.stopPropagation();
+    const modal = document.getElementById('create-session-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function handleCreateSessionSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-session-start');
+    
+    const tournament = document.getElementById('session-tournament-select').value;
+    const entryFee = parseFloat(document.getElementById('session-entry-fee').value) || 0.0;
+    const bountyTarget = document.getElementById('session-bounty-target-select').value;
+    const bountyAmount = parseFloat(document.getElementById('session-bounty-amount').value) || 0.0;
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Creating Session...';
+    }
+    
+    const payload = {
+        action: 'create_session',
+        tournament: tournament,
+        entryFee: entryFee,
+        bountyTarget: bountyTarget,
+        bountyAmount: bountyAmount,
+        status: 'draft',
+        year: 2026
+    };
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        
+        delete googleSheetsCache['CHECK_IN_SESSIONS'];
+        
+        closeCreateSessionModal();
+        document.getElementById('create-session-form').reset();
+        
+        setTimeout(async () => {
+            await loadCheckInSessions();
+            const sorted = [...checkInSessionsData].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const newSess = sorted.find(s => s.tournament === tournament);
+            if (newSess) {
+                openCheckInSession(newSess.sessionId);
+            }
+        }, 1200);
+        
+    } catch (err) {
+        console.error("Error creating session:", err);
+        alert("Failed to create session: " + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '🏁 Start Tourney';
+        }
+    }
+}
+
+function openCheckInSession(sessionId) {
+    activeCheckInSession = sessionId;
+    renderActiveSession(sessionId);
+}
+
+// Get player grade in tournament based on historical data
+function getTourneyGradeForPlayer(playerName, tournamentName) {
+    const allEntries = cupData.granular.filter(g => g['Player Name'] === playerName && g.Tournament === tournamentName.toUpperCase());
+    if (allEntries.length === 0) {
+        return { grade: 'N/A', gradeClass: 'grade-na', avgPts: 0.0, entries: 0 };
+    }
+    
+    const totalPts = allEntries.reduce((sum, e) => sum + e['PC Points'], 0);
+    const count = allEntries.length;
+    const avg = totalPts / count;
+    
+    let grade = 'F';
+    let gradeClass = 'grade-f';
+    
+    if (avg >= 16.0) { grade = 'A+'; gradeClass = 'grade-a'; }
+    else if (avg >= 13.0) { grade = 'A'; gradeClass = 'grade-a'; }
+    else if (avg >= 11.0) { grade = 'A-'; gradeClass = 'grade-a'; }
+    else if (avg >= 9.5) { grade = 'B+'; gradeClass = 'grade-b'; }
+    else if (avg >= 8.0) { grade = 'B'; gradeClass = 'grade-b'; }
+    else if (avg >= 6.5) { grade = 'B-'; gradeClass = 'grade-b'; }
+    else if (avg >= 5.0) { grade = 'C+'; gradeClass = 'grade-c'; }
+    else if (avg >= 4.0) { grade = 'C'; gradeClass = 'grade-c'; }
+    else if (avg >= 3.0) { grade = 'C-'; gradeClass = 'grade-c'; }
+    else if (avg >= 2.0) { grade = 'D'; gradeClass = 'grade-d'; }
+    else { grade = 'F'; gradeClass = 'grade-f'; }
+    
+    return { grade, gradeClass, avgPts: avg, entries: count };
+}
+
+// Render active session check-in panel
+async function renderActiveSession(sessionId) {
+    const s = checkInSessionsData.find(x => x.sessionId === sessionId);
+    if (!s) return;
+    
+    const container = document.getElementById('leaderboard-table-container');
+    if (!container) return;
+    
+    const highlights = document.getElementById('tournament-highlights-container');
+    if (highlights) highlights.style.display = 'none';
+    
+    const participants = checkInPlayersData.filter(p => p.sessionId === sessionId);
+    const totalCollected = participants.reduce((sum, p) => sum + p.entryFeePaid, 0);
+    const activePool = totalCollected - s.bountyAmount;
+    
+    const checkedInNames = participants.map(p => p.player);
+    const allRosterNames = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
+    
+    const veteranPlayers = [];
+    const rookiePlayers = [];
+    
+    allRosterNames.forEach(name => {
+        const histEntries = cupData.granular.filter(g => g['Player Name'] === name && g.Tournament === s.tournament.toUpperCase());
+        if (histEntries.length > 0) {
+            veteranPlayers.push(name);
+        } else {
+            rookiePlayers.push(name);
+        }
+    });
+    
+    let dropdownHtml = '<option value="" disabled selected>-- Select Player --</option>';
+    dropdownHtml += '<optgroup label="Veterans (Played before)">';
+    veteranPlayers.forEach(name => {
+        const disabled = checkedInNames.includes(name) ? 'disabled style="color: var(--text-secondary); opacity: 0.5;"' : '';
+        dropdownHtml += `<option value="${name.replace(/"/g, '&quot;')}" ${disabled}>${name}</option>`;
+    });
+    dropdownHtml += '</optgroup>';
+    dropdownHtml += '<optgroup label="Rookies (New to event)">';
+    rookiePlayers.forEach(name => {
+        const disabled = checkedInNames.includes(name) ? 'disabled style="color: var(--text-secondary); opacity: 0.5;"' : '';
+        dropdownHtml += `<option value="${name.replace(/"/g, '&quot;')}" ${disabled}>${name}</option>`;
+    });
+    dropdownHtml += '</optgroup>';
+    
+    let statusActionsHtml = '';
+    if (s.status === 'draft') {
+        statusActionsHtml = `<button class="bet-btn resolve" onclick="updateSessionStatus('${s.sessionId}', 'active')" style="padding: 0.4rem 0.6rem; font-size: 0.8rem;">🏁 Mark Active</button>`;
+    } else if (s.status === 'active') {
+        statusActionsHtml = `
+            <button class="bet-btn resolve" onclick="updateSessionStatus('${s.sessionId}', 'draft')" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; background: var(--bg-sidebar); border-color: var(--border-color); color: var(--text-secondary);">✏️ Make Draft</button>
+            <button class="bet-btn paid-btn" onclick="showSettlePayoutsModal('${s.sessionId}')" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; background: linear-gradient(135deg, var(--accent-gold), hsl(45, 100%, 40%)); color: var(--bg-sidebar); font-weight: 800;">🏆 Settle & Payout</button>
+        `;
+    }
+    
+    let participantsHtml = '';
+    if (participants.length === 0) {
+        participantsHtml = '<p style="color: var(--text-secondary); font-style: italic; padding: 1.5rem; text-align: center;">No players checked in yet.</p>';
+    } else {
+        participantsHtml = `<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">`;
+        participants.forEach(p => {
+            const isBountyTarget = s.bountyTarget === p.player;
+            const stats = getTourneyGradeForPlayer(p.player, s.tournament);
+            
+            let statsLabel = stats.entries > 0 ? `${stats.avgPts.toFixed(1)} avg &middot; ${stats.entries} entry` : 'Never entered';
+            const checkedFree = p.freeEntry === 'Yes' ? 'checked' : '';
+            const freeLabelStyle = p.freeEntry === 'Yes' ? 'color: var(--accent-gold); font-weight: 700;' : 'color: var(--text-secondary);';
+            const rowBackground = isBountyTarget ? 'background: hsla(0, 85%, 50%, 0.08); border-color: var(--accent-red);' : 'background: hsla(222, 20%, 15%, 0.35);';
+            const bountyTargetBadge = isBountyTarget ? `<span style="padding: 0.15rem 0.4rem; font-size: 0.72rem; font-weight: 700; color: var(--accent-red); background: hsla(0, 85%, 50%, 0.15); border: 1px solid hsla(0, 85%, 50%, 0.25); border-radius: 4px; margin-left: 0.4rem;">🎯 BOUNTY TARGET</span>` : '';
+            
+            participantsHtml += `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.8rem; border: 1px solid var(--border-color); border-radius: 12px; transition: all 0.2s; ${rowBackground}">
+                    <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
+                        <span class="rank-badge ${stats.gradeClass}" style="width: 32px; height: 32px; font-size: 0.8rem; font-weight: 800; flex-shrink: 0; line-height: 32px; text-align: center; border-radius: 50%; color: var(--text-primary); display: inline-block;">${stats.grade}</span>
+                        <div style="display: flex; flex-direction: column; min-width: 0;">
+                            <span style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; text-decoration: underline;" onclick="showPlayerCard('${p.player.replace(/'/g, "\\'")}')">${p.player}${bountyTargetBadge}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">${statsLabel}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
+                        <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer; ${freeLabelStyle}">
+                            <input type="checkbox" class="free-entry-check" ${checkedFree} onclick="togglePlayerFreeEntry('${s.sessionId}', '${p.player.replace(/'/g, "\\'")}', this.checked)" style="width: 14px; height: 14px; cursor: pointer;">
+                            <span>Free</span>
+                        </label>
+                        <span style="font-size: 0.9rem; font-weight: 700; color: var(--accent-gold); width: 40px; text-align: right;">$${p.entryFeePaid.toFixed(0)}</span>
+                        <button onclick="removePlayerFromCheckIn('${s.sessionId}', '${p.player.replace(/'/g, "\\'")}', '${s.tournament.replace(/'/g, "\\'")}')" style="background: none; border: none; color: var(--accent-red); font-weight: 800; font-size: 1.1rem; cursor: pointer; padding: 0.2rem;">✕</button>
+                    </div>
+                </div>
+            `;
+        });
+        participantsHtml += `</div>`;
+    }
+    
+    let bountyTextHtml = '';
+    if (s.bountyAmount > 0) {
+        bountyTextHtml = `<div style="font-size: 0.8rem; color: var(--accent-red); font-weight: 700; margin-top: 0.25rem;">🎯 Bounty: $${s.bountyAmount.toFixed(0)} on ${s.bountyTarget || 'N/A'}</div>`;
+    }
+    
+    container.innerHTML = `
+        <div style="padding: 1rem 1.5rem; text-align: left;">
+            <div style="margin-bottom: 1.25rem;">
+                <button onclick="closeActiveSession()" style="background: none; border: none; color: var(--accent-cyan); font-weight: 700; font-size: 0.9rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 0.3rem;">
+                    ← Back to Tournaments
+                </button>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+                <div>
+                    <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                        🎟️ ${s.tournament} Check-In
+                        <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--border-color); border-radius: 4px; color: var(--text-secondary); text-transform: uppercase;">${s.status}</span>
+                    </h2>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Entry Fee: $${s.entryFee.toFixed(0)} &middot; Created ${formatBetDate(s.createdAt)}</span>
+                </div>
+                <div style="display: flex; gap: 0.4rem;">
+                    ${statusActionsHtml}
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: hsla(222, 20%, 15%, 0.4); border: 1px solid var(--border-color); padding: 0.8rem; border-radius: 12px; display: flex; flex-direction: column;">
+                    <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.5px;">Prize Pool</span>
+                    <span style="font-size: 1.6rem; font-weight: 800; color: var(--accent-gold);">$${activePool.toFixed(0)}</span>
+                    <span style="font-size: 0.73rem; color: var(--text-secondary); margin-top: 0.2rem;">Splits among tournament winners</span>
+                </div>
+                <div style="background: hsla(222, 20%, 15%, 0.4); border: 1px solid var(--border-color); padding: 0.8rem; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.5px;">Paid Registrations</span>
+                        <span style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); display: block;">$${totalCollected.toFixed(0)}</span>
+                    </div>
+                    ${bountyTextHtml}
+                </div>
+            </div>
+            
+            <form onsubmit="handleCheckInPlayerSubmit(event, '${s.sessionId}', '${s.tournament}', ${s.entryFee})" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; background: hsla(222, 28%, 7%, 0.3); padding: 0.75rem; border-radius: 12px; border: 1px dashed var(--border-color);">
+                <select id="checkin-player-select" class="form-select" style="flex: 1;" required>
+                    ${dropdownHtml}
+                </select>
+                <button type="submit" class="action-btn" style="padding: 0 1rem; height: 38px; line-height: 38px; border-radius: 8px;">✅ Check In</button>
+            </form>
+            
+            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem; margin-bottom: 0.5rem;">Checked In Players (${participants.length})</h3>
+            ${participantsHtml}
+        </div>
+    `;
+}
+
+function closeActiveSession() {
+    activeCheckInSession = null;
+    renderCheckInWidget();
+    renderTournamentTable();
+}
+
+async function togglePlayerFreeEntry(sessionId, player, isFree) {
+    const s = checkInSessionsData.find(x => x.sessionId === sessionId);
+    if (!s) return;
+    
+    if (isFree) {
+        const freeCount = checkInPlayersData.filter(p => p.sessionId === sessionId && p.freeEntry === 'Yes').length;
+        if (freeCount >= 2) {
+            alert("Limit reached! Maximum of 2 players can be given free director entries per event.");
+            renderActiveSession(sessionId);
+            return;
+        }
+    }
+    
+    const entryFeePaid = isFree ? 0 : s.entryFee;
+    const freeVal = isFree ? 'Yes' : '';
+    
+    const pLocal = checkInPlayersData.find(p => p.sessionId === sessionId && p.player === player);
+    if (pLocal) {
+        pLocal.entryFeePaid = entryFeePaid;
+        pLocal.freeEntry = freeVal;
+    }
+    renderActiveSession(sessionId);
+    
+    const payload = {
+        action: 'toggle_free_entry',
+        sessionId: sessionId,
+        player: player,
+        entryFeePaid: entryFeePaid,
+        freeEntry: freeVal
+    };
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        delete googleSheetsCache['CHECK_IN'];
+        loadCheckInSessions();
+    } catch (e) {
+        console.error("Free entry toggle failed:", e);
+    }
+}
+
+async function handleCheckInPlayerSubmit(e, sessionId, tournament, entryFee) {
+    e.preventDefault();
+    const select = document.getElementById('checkin-player-select');
+    const player = select.value;
+    if (!player) return;
+    
+    const exists = checkInPlayersData.some(p => p.sessionId === sessionId && p.player === player);
+    if (exists) return;
+    
+    checkInPlayersData.push({
+        sessionId: sessionId,
+        tournament: tournament,
+        year: 2026,
+        player: player,
+        entryFeePaid: entryFee,
+        freeEntry: '',
+        removed: '',
+        checkedInAt: new Date().toISOString()
+    });
+    renderActiveSession(sessionId);
+    
+    const payload = {
+        action: 'checkin_player',
+        sessionId: sessionId,
+        tournament: tournament,
+        player: player,
+        entryFeePaid: entryFee,
+        year: 2026
+    };
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        delete googleSheetsCache['CHECK_IN'];
+        loadCheckInSessions();
+    } catch (err) {
+        console.error("Player check-in failed:", err);
+    }
+}
+
+async function removePlayerFromCheckIn(sessionId, player, tournament) {
+    if (!confirm(`Are you sure you want to remove ${player} from this tournament check-in?`)) return;
+    
+    checkInPlayersData = checkInPlayersData.filter(p => !(p.sessionId === sessionId && p.player === player));
+    renderActiveSession(sessionId);
+    
+    const payload = {
+        action: 'uncheckin_player',
+        sessionId: sessionId,
+        player: player
+    };
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        delete googleSheetsCache['CHECK_IN'];
+        loadCheckInSessions();
+    } catch (err) {
+        console.error("Remove player failed:", err);
+    }
+}
+
+async function updateSessionStatus(sessionId, status) {
+    const s = checkInSessionsData.find(x => x.sessionId === sessionId);
+    if (s) s.status = status;
+    renderActiveSession(sessionId);
+    
+    const payload = {
+        action: 'update_session_status',
+        sessionId: sessionId,
+        status: status
+    };
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        delete googleSheetsCache['CHECK_IN_SESSIONS'];
+        loadCheckInSessions();
+    } catch (e) {
+        console.error("Status update failed:", e);
+    }
+}
+
+// Show settle payouts modal
+function showSettlePayoutsModal(sessionId) {
+    const s = checkInSessionsData.find(x => x.sessionId === sessionId);
+    if (!s) return;
+    
+    const participants = checkInPlayersData.filter(p => p.sessionId === sessionId);
+    if (participants.length === 0) {
+        alert("Cannot settle a tournament with 0 players.");
+        return;
+    }
+    
+    const totalCollected = participants.reduce((sum, p) => sum + p.entryFeePaid, 0);
+    const activePool = totalCollected - s.bountyAmount;
+    
+    let winnersListHtml = '';
+    participants.forEach(p => {
+        winnersListHtml += `
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <input type="checkbox" class="settle-winner-check-in" value="${p.player.replace(/"/g, '&quot;')}" style="width: 18px; height: 18px;">
+                <span>${p.player}</span>
+            </label>
+        `;
+    });
+    
+    let bountyHunterHtml = '';
+    if (s.bountyAmount > 0) {
+        let bountyOptions = `<option value="">-- No One / Target Survived --</option>`;
+        participants.forEach(p => {
+            if (p.player !== s.bountyTarget) {
+                bountyOptions += `<option value="${p.player.replace(/"/g, '&quot;')}">${p.player}</option>`;
+            }
+        });
+        bountyHunterHtml = `
+            <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Bounty Winner (Who eliminated ${s.bountyTarget}?)</label>
+                <select class="form-select" id="settle-bounty-winner-select">
+                    ${bountyOptions}
+                </select>
+            </div>
+        `;
+    }
+    
+    const inner = document.getElementById('settle-payouts-inner');
+    inner.innerHTML = `
+        <div class="card-header-block" style="margin-bottom: 0.5rem;">
+            <div class="card-name" style="font-size: 1.4rem;">🎯 Settle Event Payouts</div>
+            <div class="card-nickname" style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Confirm winners and payout payouts</div>
+        </div>
+        
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem; background: hsla(222, 20%, 15%, 0.3); padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color);">
+            Event: <strong>${s.tournament}</strong> &middot; Entry Fee: <strong>$${s.entryFee}</strong><br>
+            Total collected: <strong>$${totalCollected}</strong> &middot; Calculated Prize Pool: <strong>$${activePool}</strong>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Winners (Select all who split the pot)</label>
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 180px; overflow-y: auto; padding-right: 0.25rem;">
+                ${winnersListHtml}
+            </div>
+        </div>
+        
+        ${bountyHunterHtml}
+        
+        <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+            <label for="settle-pot-override" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Total Prize Pool to Distribute ($)</label>
+            <input type="number" class="form-input" id="settle-pot-override" value="${activePool}" min="0">
+        </div>
+        
+        <button class="action-btn" onclick="confirmSettlePayouts('${s.sessionId}')" style="width: 100%; padding: 0.8rem; border-radius: 12px; font-weight: 700; margin-top: 0.5rem;">💾 Save Payouts & Complete</button>
+    `;
+    
+    document.getElementById('settle-payouts-modal').classList.add('active');
+}
+
+function closeSettlePayoutsModal(event) {
+    if (event) event.stopPropagation();
+    const modal = document.getElementById('settle-payouts-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function confirmSettlePayouts(sessionId) {
+    const s = checkInSessionsData.find(x => x.sessionId === sessionId);
+    if (!s) return;
+    
+    const checkedWinners = Array.from(document.querySelectorAll('.settle-winner-check-in:checked')).map(c => c.value);
+    if (checkedWinners.length === 0) {
+        alert("Please select at least one winner.");
+        return;
+    }
+    
+    const distPool = parseFloat(document.getElementById('settle-pot-override').value) || 0.0;
+    const winShare = distPool / checkedWinners.length;
+    
+    let bountyWinner = '';
+    const bountySelect = document.getElementById('settle-bounty-winner-select');
+    if (bountySelect) {
+        bountyWinner = bountySelect.value;
+    }
+    
+    closeSettlePayoutsModal();
+    
+    const container = document.getElementById('leaderboard-table-container');
+    if (container) {
+        container.innerHTML = `
+            <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                <span class="loading-spinner">⏳</span> Saving payouts & completing session in Google Sheets...
+            </div>
+        `;
+    }
+    
+    const payload = {
+        action: 'save_payouts',
+        sessionId: sessionId,
+        tournament: s.tournament,
+        year: 2026,
+        winners: checkedWinners,
+        winShare: winShare,
+        bountyWinner: bountyWinner,
+        bountyAmount: s.bountyAmount
+    };
+    
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        
+        delete googleSheetsCache['CHECK_IN_SESSIONS'];
+        delete googleSheetsCache['PAYOUTS'];
+        
+        activeCheckInSession = null;
+        
+        setTimeout(() => {
+            loadCheckInSessions();
+        }, 1200);
+    } catch (e) {
+        console.error("Failed to save payouts:", e);
+        alert("Failed to save payouts: " + e.message);
+        loadCheckInSessions();
+    }
+}
+
+// Render winnings leaderboard at the bottom of the tournament view
+function renderWinningsLeaderboard() {
+    const tableContainer = document.getElementById('leaderboard-table-container');
+    if (!tableContainer) return;
+    
+    // Remove existing card to prevent duplicates
+    const existingCard = document.getElementById('winnings-leaderboard-card');
+    if (existingCard) {
+        existingCard.remove();
+    }
+    
+    const stats = {};
+    const names = cupData.lifetime.map(p => p.PlayerName);
+    names.forEach(n => {
+        stats[n] = { name: n, entries: 0, paidIn: 0, won: 0, net: 0 };
+    });
+    
+    const completedSessionIds = checkInSessionsData.filter(s => s.status === 'complete').map(s => s.sessionId);
+    
+    // Calculate paid in and entries from CHECK_IN data
+    checkInPlayersData.forEach(p => {
+        if (completedSessionIds.includes(p.sessionId)) {
+            if (!stats[p.player]) {
+                stats[p.player] = { name: p.player, entries: 0, paidIn: 0, won: 0, net: 0 };
+            }
+            stats[p.player].entries++;
+            stats[p.player].paidIn += p.entryFeePaid;
+        }
+    });
+    
+    // Calculate amount won from PAYOUTS data
+    checkInPayoutsData.forEach(p => {
+        if (completedSessionIds.includes(p.sessionId)) {
+            if (!stats[p.player]) {
+                stats[p.player] = { name: p.player, entries: 0, paidIn: 0, won: 0, net: 0 };
+            }
+            stats[p.player].won += p.amountWon;
+        }
+    });
+    
+    const boardData = Object.values(stats).map(p => {
+        p.net = p.won - p.paidIn;
+        return p;
+    }).filter(p => p.entries > 0 || p.won > 0);
+    
+    boardData.sort((a,b) => b.net - a.net || b.won - a.won);
+    
+    let rowsHtml = '';
+    if (boardData.length === 0) {
+        rowsHtml = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 1.5rem; font-style: italic;">No tournament payouts logged yet.</td></tr>`;
+    } else {
+        boardData.forEach(p => {
+            const netClass = p.net > 0 ? 'positive' : p.net < 0 ? 'negative' : 'neutral';
+            const netPrefix = p.net > 0 ? '+$' : p.net < 0 ? '-$' : '$';
+            const netDisplay = netPrefix + Math.abs(p.net).toFixed(0);
+            
+            rowsHtml += `
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-primary); cursor: pointer;" onclick="showPlayerCard('${p.name.replace(/'/g, "\\'")}')">${p.name}</td>
+                    <td style="text-align: center;">${p.entries}</td>
+                    <td style="text-align: right; color: var(--text-secondary); font-weight: 600;">$${p.paidIn.toFixed(0)}</td>
+                    <td style="text-align: right; color: var(--accent-green); font-weight: 700;">$${p.won.toFixed(0)}</td>
+                    <td style="text-align: right; font-weight: 700;" class="bet-leaderboard-value ${netClass}">${netDisplay}</td>
+                </tr>
+            `;
+        });
+    }
+    
+    const card = document.createElement('div');
+    card.id = 'winnings-leaderboard-card';
+    card.className = 'card';
+    card.style.cssText = 'margin-top: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--border-radius); text-align: left;';
+    
+    card.innerHTML = `
+        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-primary);">
+            💰 2026 Season Tourney Winnings
+        </h3>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+            This ledger tracks aggregate entry fees and prize payouts for the 2026 season's official events (excluding side wagers).
+        </p>
+        <div class="table-container">
+             <table class="data-table">
+                  <thead>
+                       <tr>
+                           <th>Player</th>
+                           <th style="text-align: center;">Entries</th>
+                           <th style="text-align: right;">Paid In</th>
+                           <th style="text-align: right;">Won</th>
+                           <th style="text-align: right;">Net</th>
+                       </tr>
+                  </thead>
+                  <tbody>
+                       ${rowsHtml}
+                  </tbody>
+             </table>
+        </div>
+    `;
+    
+    tableContainer.appendChild(card);
+}
+
+
+

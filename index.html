@@ -79,14 +79,15 @@
 
                 <!-- Sidebar Widget Cards -->
                 <section class="widgets-area">
-                    <!-- Facebook Share Widget -->
-                    <article class="card widget-card fb-card" id="facebook-widget-card">
-                        <div class="card-header">
-                            <h3>📱 Facebook Updates Generator</h3>
-                        </div>
-                        <div class="widget-body">
-                            <p>Generate a styled, trash-talk-ready recaps with actual live stats and standings to post on Facebook!</p>
-                            <textarea class="fb-textarea" id="fb-recap-text" readonly>
+                    <div id="default-widgets">
+                        <!-- Facebook Share Widget -->
+                        <article class="card widget-card fb-card" id="facebook-widget-card">
+                            <div class="card-header">
+                                <h3>📱 Facebook Updates Generator</h3>
+                            </div>
+                            <div class="widget-body">
+                                <p>Generate a styled, trash-talk-ready recaps with actual live stats and standings to post on Facebook!</p>
+                                <textarea class="fb-textarea" id="fb-recap-text" readonly>
 📢 PAYNESVILLE CUP DAY RECAP!
 
 Standings are updating live on the Paynesville Cup Dashboard! 
@@ -94,35 +95,40 @@ Adam Murphy is still leading the pack with Pickleball dominance (+1231 odds!).
 
 Read the live leaderboards, bubble watches, and matchups here: 
 🔗 http://paynesvillecup.com
-                            </textarea>
-                            <button class="action-btn copy-btn" id="btn-copy-fb" onclick="copyRecapToClipboard()">📋 Copy Status to Clipboard</button>
-                        </div>
-                    </article>
+                                </textarea>
+                                <button class="action-btn copy-btn" id="btn-copy-fb" onclick="copyRecapToClipboard()">📋 Copy Status to Clipboard</button>
+                            </div>
+                        </article>
 
-                    <!-- Fun facts / Quick Stats Widget -->
-                    <article class="card widget-card stats-card" id="fun-stats-widget-card">
-                        <div class="card-header">
-                            <h3>⚡ Paynesville Cup Quick Stats</h3>
-                        </div>
-                        <div class="widget-body" id="quick-stats-body">
-                            <div class="stat-row">
-                                <span class="stat-label">Total Competitors</span>
-                                <span class="stat-value" id="stat-total-players">93</span>
+                        <!-- Fun facts / Quick Stats Widget -->
+                        <article class="card widget-card stats-card" id="fun-stats-widget-card">
+                            <div class="card-header">
+                                <h3>⚡ Paynesville Cup Quick Stats</h3>
                             </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Total Tournament Entries</span>
-                                <span class="stat-value" id="stat-total-entries">1,551</span>
+                            <div class="widget-body" id="quick-stats-body">
+                                <div class="stat-row">
+                                    <span class="stat-label">Total Competitors</span>
+                                    <span class="stat-value" id="stat-total-players">93</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Total Tournament Entries</span>
+                                    <span class="stat-value" id="stat-total-entries">1,551</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Defending Champion</span>
+                                    <span class="stat-value" style="color: var(--accent-gold);">Ben Aeshliman</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Pound-for-Pound Sniper</span>
+                                    <span class="stat-value" style="color: var(--accent-cyan);">Jason Lindseth (11.6 pts/t)</span>
+                                </div>
                             </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Defending Champion</span>
-                                <span class="stat-value" style="color: var(--accent-gold);">Ben Aeshliman</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Pound-for-Pound Sniper</span>
-                                <span class="stat-value" style="color: var(--accent-cyan);">Jason Lindseth (11.6 pts/t)</span>
-                            </div>
-                        </div>
-                    </article>
+                        </article>
+                    </div>
+                    
+                    <div id="checkin-widget-container" style="display: none;">
+                        <!-- Dynamically populated via app.js -->
+                    </div>
                 </section>
 
             </div>
@@ -168,6 +174,52 @@ Read the live leaderboards, bubble watches, and matchups here:
             <div class="card-glow"></div>
             <div class="card-inner" id="settle-group-inner" style="display: flex; flex-direction: column; gap: 1rem;">
                 <!-- Dynamically populated checklist of players and resolve button -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Session Modal Overlay -->
+    <div class="modal-overlay" id="create-session-modal" onclick="closeCreateSessionModal(event)">
+        <div class="player-card" id="create-session-container" onclick="event.stopPropagation()">
+            <button class="close-card-btn" onclick="closeCreateSessionModal(event)">×</button>
+            <div class="card-glow"></div>
+            <div class="card-inner" id="create-session-inner" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="card-header-block" style="margin-bottom: 0.5rem;">
+                    <div class="card-name" style="font-size: 1.4rem;">🎟️ Create Tournament Event</div>
+                    <div class="card-nickname" style="color: var(--accent-cyan); font-weight: 700; margin-top: 0.25rem;">Start a new check-in list</div>
+                </div>
+                <form id="create-session-form" onsubmit="handleCreateSessionSubmit(event)">
+                    <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label for="session-tournament-select" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Tournament *</label>
+                        <select class="form-select" id="session-tournament-select" required></select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label for="session-entry-fee" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Entry Fee ($) *</label>
+                        <input type="number" class="form-input" id="session-entry-fee" min="0" value="5" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label for="session-bounty-target-select" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Bounty Target (Optional)</label>
+                        <select class="form-select" id="session-bounty-target-select">
+                            <option value="">-- None --</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label for="session-bounty-amount" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Bounty Amount ($)</label>
+                        <input type="number" class="form-input" id="session-bounty-amount" min="0" value="0">
+                    </div>
+                    <button type="submit" class="action-btn" id="btn-session-start" style="width: 100%; margin-top: 1rem;">🏁 Start Tourney</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settle Payouts Modal Overlay -->
+    <div class="modal-overlay" id="settle-payouts-modal" onclick="closeSettlePayoutsModal(event)">
+        <div class="player-card" id="settle-payouts-container" onclick="event.stopPropagation()">
+            <button class="close-card-btn" onclick="closeSettlePayoutsModal(event)">×</button>
+            <div class="card-glow"></div>
+            <div class="card-inner" id="settle-payouts-inner" style="display: flex; flex-direction: column; gap: 1rem;">
+                <!-- Dynamically populated checklist and bounty input -->
             </div>
         </div>
     </div>

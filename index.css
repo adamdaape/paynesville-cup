@@ -655,7 +655,7 @@ body {
 
     .main-content {
         padding: 1rem 0.875rem;
-        padding-bottom: 90px; /* clearance for the bottom nav */
+        padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); /* clearance for the bottom nav */
         gap: 1rem;
     }
 
@@ -966,7 +966,7 @@ body {
         bottom: 0;
         left: 0;
         right: 0;
-        height: 64px;
+        height: calc(64px + env(safe-area-inset-bottom, 0px));
         background-color: var(--bg-sidebar);
         border-top: 1px solid var(--border-color);
         z-index: 500;
@@ -1059,13 +1059,13 @@ body {
         display: none; /* just icons on very tiny screens */
     }
     .mobile-bottom-nav {
-        height: 52px;
+        height: calc(52px + env(safe-area-inset-bottom, 0px));
     }
     .mobile-nav-icon {
         font-size: 1.4rem;
     }
     .main-content {
-        padding-bottom: 70px;
+        padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
     }
 }
 
