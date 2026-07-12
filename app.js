@@ -3036,8 +3036,8 @@ async function renderHistoryBets(container) {
         
         const isSplit = b.type.endsWith('(Split)');
         
-        sideA.forEach(p => { if (p !== 'Group Pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
-        sideB.forEach(p => { if (p !== 'Group Pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
+        sideA.forEach(p => { if (p && p.trim().toLowerCase() !== 'group pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
+        sideB.forEach(p => { if (p && p.trim().toLowerCase() !== 'group pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
         
         if (winnerStr === 'Tie') return;
         
@@ -3090,7 +3090,7 @@ async function renderHistoryBets(container) {
     let leaderboard = Object.entries(netEarnings)
         .map(([name, val]) => ({ name, val }))
         .filter(item => {
-            if (item.name === 'Group Pot') return false;
+            if (item.name && item.name.trim().toLowerCase() === 'group pot') return false;
             if (item.val !== 0) return true;
             return sideBetsData.some(b => {
                 const sA = b.playerA.split(',').map(n => n.trim());
