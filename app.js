@@ -1099,8 +1099,11 @@ function renderBubbleTable() {
 }
 
 // ----------------- RENDER COUSIN RIVALRY COMPARISON -----------------
-function renderRivalryComparison() {
+async function renderRivalryComparison() {
     if (!cupData) return;
+    
+    // Ensure side bets are loaded
+    await loadSideBets();
     
     const container = document.getElementById('leaderboard-table-container');
     const names = cupData.lifetime.map(p => p.PlayerName);
