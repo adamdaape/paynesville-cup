@@ -278,13 +278,39 @@ async function ensure2026EventDataLoaded(tournamentName) {
         const ptsVal = ptsIdx !== -1 ? parseFloat(row[ptsIdx]) : 0.0;
         const scoreVal = scoreIdx !== -1 ? row[scoreIdx] : 'N/A';
         
+        // Money columns (new for 2026+)
+        let entryFeeIdx = -1;
+        for (let c of ['Entry Fee', 'ENTRY FEE', 'Entry', 'Fee']) {
+            entryFeeIdx = headers.indexOf(c);
+            if (entryFeeIdx !== -1) break;
+        }
+        let winningsIdx = -1;
+        for (let c of ['Winnings', 'WINNINGS', 'Prize', 'Payout']) {
+            winningsIdx = headers.indexOf(c);
+            if (winningsIdx !== -1) break;
+        }
+        let bountyIdx = -1;
+        for (let c of ['Bounty', 'BOUNTY', 'Bounty Won', 'BOUNTY WON']) {
+            bountyIdx = headers.indexOf(c);
+            if (bountyIdx !== -1) break;
+        }
+
+        const entryFee = entryFeeIdx !== -1 ? (parseFloat(row[entryFeeIdx]) || 0.0) : 0.0;
+        const winnings  = winningsIdx  !== -1 ? (parseFloat(row[winningsIdx])  || 0.0) : 0.0;
+        const bounty    = bountyIdx    !== -1 ? (parseFloat(row[bountyIdx])    || 0.0) : 0.0;
+        const netMoney  = Math.round((winnings + bounty - entryFee) * 100) / 100;
+
         entries2026.push({
             'Year': 2026,
             'Tournament': tournamentName.toUpperCase(),
             'Player Name': name,
             'Place': row[placeIdx] || 'N/A',
             'Score': scoreVal || 'N/A',
-            'PC Points': isNaN(ptsVal) ? 0.0 : ptsVal
+            'PC Points': isNaN(ptsVal) ? 0.0 : ptsVal,
+            'EntryFee': entryFee,
+            'Winnings': winnings,
+            'Bounty': bounty,
+            'NetMoney': netMoney
         });
     });
     
@@ -293,6 +319,16 @@ async function ensure2026EventDataLoaded(tournamentName) {
     // Clear and merge into granular event database
     cupData.granular = cupData.granular.filter(g => !(g.Year === 2026 && g.Tournament === tournamentName.toUpperCase()));
     cupData.granular = cupData.granular.concat(entries2026);
+
+    // Recalculate per-player money totals from all 2026 granular entries
+    const granular2026 = cupData.granular.filter(g => g.Year === 2026);
+    cupData.lifetime.forEach(p => {
+        const playerEntries = granular2026.filter(g => g['Player Name'] === p.PlayerName);
+        p.TourneyMoneyNet          = Math.round(playerEntries.reduce((s, g) => s + (g.NetMoney  || 0), 0) * 100) / 100;
+        p.TourneyEntryFeesPaid     = Math.round(playerEntries.reduce((s, g) => s + (g.EntryFee  || 0), 0) * 100) / 100;
+        p.TourneyWinnings          = Math.round(playerEntries.reduce((s, g) => s + (g.Winnings  || 0), 0) * 100) / 100;
+        p.TourneyBountyEarnings    = Math.round(playerEntries.reduce((s, g) => s + (g.Bounty    || 0), 0) * 100) / 100;
+    });
 }
 
 // Fetch data from cup_data.json
@@ -548,13 +584,14 @@ function renderLifetimeTable() {
                 <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2024')" title="2024 Cup Score">2024 ${getSortIndicator('2024', sortKey, sortAscending)}</th>
                 <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2025')" title="2025 Cup Score">2025 ${getSortIndicator('2025', sortKey, sortAscending)}</th>
                 <th style="text-align: center; cursor: pointer;" onclick="setLifetimeSort('2026')" title="2026 Cup Score">2026 ${getSortIndicator('2026', sortKey, sortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap; color: var(--accent-gold);" onclick="setLifetimeSort('TourneyMoneyNet')" title="Tournament Net Money (2026+)">💰 $ Net ${getSortIndicator('TourneyMoneyNet', sortKey, sortAscending)}</th>
             </tr>
         </thead>
         <tbody>
     `;
     
     if (filtered.length === 0) {
-        html += `<tr><td colspan="11" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No players found matching your search.</td></tr>`;
+        html += `<tr><td colspan="12" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No players found matching your search.</td></tr>`;
     } else {
         filtered.forEach((p, idx) => {
             // Find absolute rank based on overall standings list order
@@ -569,6 +606,18 @@ function renderLifetimeTable() {
             const cell2025 = p['2025'] !== null ? `${p['2025'].toFixed(1)}` : '-';
             const cell2026 = p['2026'] !== null && p['2026'] !== undefined ? `${p['2026'].toFixed(1)}` : '-';
             
+            // Money cell: show +$X / -$X / — depending on data
+            const moneyNet = p.TourneyMoneyNet;
+            let cellMoney = '—';
+            let moneyStyle = 'color: var(--text-secondary); opacity: 0.5;';
+            if (moneyNet !== null && moneyNet !== undefined && p.TourneyEntryFeesPaid > 0) {
+                const sign = moneyNet >= 0 ? '+' : '';
+                cellMoney = `${sign}$${moneyNet.toFixed(2)}`;
+                moneyStyle = moneyNet >= 0
+                    ? 'color: hsl(145, 70%, 55%); font-weight: 700;'
+                    : 'color: var(--accent-red); font-weight: 700;';
+            }
+
             html += `
                 <tr>
                     <td style="text-align: center;"><span class="rank-badge ${badgeClass}">${originalRank}</span></td>
@@ -582,6 +631,7 @@ function renderLifetimeTable() {
                     <td style="text-align: center; opacity: ${p['2024'] !== null ? 1 : 0.4};">${cell2024}</td>
                     <td style="text-align: center; opacity: ${p['2025'] !== null ? 1 : 0.4};">${cell2025}</td>
                     <td style="text-align: center; opacity: ${p['2026'] !== null && p['2026'] !== undefined ? 1 : 0.4};">${cell2026}</td>
+                    <td style="text-align: right; ${moneyStyle}">${cellMoney}</td>
                 </tr>
             `;
         });
@@ -1828,6 +1878,12 @@ function showPlayerCard(name) {
         container.classList.remove('gold-border');
     }
     
+    const moneyNet = p.TourneyMoneyNet;
+    const hasMoney  = (p.TourneyEntryFeesPaid || 0) > 0;
+    const moneySign = hasMoney ? (moneyNet >= 0 ? '+' : '') : '';
+    const moneyVal  = hasMoney ? `${moneySign}$${moneyNet.toFixed(2)}` : '—';
+    const moneyColor = !hasMoney ? 'var(--text-secondary)' : moneyNet >= 0 ? 'hsl(145, 70%, 55%)' : 'var(--accent-red)';
+
     const inner = document.getElementById('player-card-inner');
     inner.innerHTML = `
         <div class="card-header-block">
@@ -1836,7 +1892,7 @@ function showPlayerCard(name) {
             ${isChamp ? '<div class="card-badge">🏆 CUP CHAMPION</div>' : ''}
         </div>
         
-        <div class="sports-stats-grid">
+        <div class="sports-stats-grid" style="grid-template-columns: repeat(5, 1fr);">
             <div class="sports-stat-col">
                 <span class="sports-stat-lbl">PTS</span>
                 <span class="sports-stat-val">${p.LifetimeCupPoints.toFixed(1)}</span>
@@ -1852,6 +1908,10 @@ function showPlayerCard(name) {
             <div class="sports-stat-col">
                 <span class="sports-stat-lbl">AVG</span>
                 <span class="sports-stat-val">${p.AverageCupScore.toFixed(1)}</span>
+            </div>
+            <div class="sports-stat-col">
+                <span class="sports-stat-lbl">TOURNEY $</span>
+                <span class="sports-stat-val" style="font-size: 0.95rem; color: ${moneyColor};">${moneyVal}</span>
             </div>
         </div>
         
@@ -3638,7 +3698,7 @@ async function loadCheckInSessions() {
                 bountyWinner: row[winnerIdx] || '',
                 status: row[statusIdx] || 'draft',
                 createdAt: row[timeIdx]
-            })).filter(s => s.sessionId);
+            })).filter(s => s.sessionId && s.status && s.status.toLowerCase() !== 'deleted');
         } else {
             checkInSessionsData = [];
         }
@@ -3734,7 +3794,8 @@ function renderCheckInWidget() {
         activeSessions.forEach(s => {
             const participants = checkInPlayersData.filter(p => p.sessionId === s.sessionId);
             const totalCollected = participants.reduce((sum, p) => sum + p.entryFeePaid, 0);
-            const activePool = totalCollected - s.bountyAmount;
+            const bountyTargetsList = s.bountyTarget ? s.bountyTarget.split(',').map(n => n.trim()).filter(Boolean) : [];
+            const activePool = totalCollected - (s.bountyAmount * bountyTargetsList.length);
             const formattedDate = formatBetDate(s.createdAt) || 'Recent';
             
             activeSessionsHtml += `
@@ -3757,6 +3818,8 @@ function renderCheckInWidget() {
             </p>
         `;
     }
+
+
     
     container.innerHTML = `
         <div class="card widget-card">
@@ -3922,7 +3985,8 @@ async function renderActiveSession(sessionId) {
     
     const participants = checkInPlayersData.filter(p => p.sessionId === sessionId);
     const totalCollected = participants.reduce((sum, p) => sum + p.entryFeePaid, 0);
-    const activePool = totalCollected - s.bountyAmount;
+    const bountyTargetsList = s.bountyTarget ? s.bountyTarget.split(',').map(n => n.trim()).filter(Boolean) : [];
+    const activePool = totalCollected - (s.bountyAmount * bountyTargetsList.length);
     
     const checkedInNames = participants.map(p => p.player);
     const allRosterNames = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
@@ -3955,7 +4019,10 @@ async function renderActiveSession(sessionId) {
     
     let statusActionsHtml = '';
     if (s.status === 'draft') {
-        statusActionsHtml = `<button class="bet-btn resolve" onclick="updateSessionStatus('${s.sessionId}', 'active')" style="padding: 0.4rem 0.6rem; font-size: 0.8rem;">🏁 Mark Active</button>`;
+        statusActionsHtml = `
+            <button class="bet-btn resolve" onclick="updateSessionStatus('${s.sessionId}', 'active')" style="padding: 0.4rem 0.6rem; font-size: 0.8rem;">🏁 Mark Active</button>
+            <button class="bet-btn" onclick="deleteSession('${s.sessionId}')" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; background: var(--accent-red); border-color: var(--accent-red); color: white;">🗑️ Delete Draft</button>
+        `;
     } else if (s.status === 'active') {
         statusActionsHtml = `
             <button class="bet-btn resolve" onclick="updateSessionStatus('${s.sessionId}', 'draft')" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; background: var(--bg-sidebar); border-color: var(--border-color); color: var(--text-secondary);">✏️ Make Draft</button>
@@ -3965,7 +4032,7 @@ async function renderActiveSession(sessionId) {
     
     let participantsHtml = '';
     if (participants.length === 0) {
-        participantsHtml = '<p style="color: var(--text-secondary); font-style: italic; padding: 1.5rem; text-align: center;">No players checked in yet.</p>';
+        participantsHtml = '<p style="color: var(--text-secondary); font-style: italic; padding: 1.5rem; text-align: center;">No players registered yet.</p>';
     } else {
         participantsHtml = `<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">`;
         participants.forEach(p => {
@@ -3975,7 +4042,12 @@ async function renderActiveSession(sessionId) {
             
             let statsLabel = stats.entries > 0 ? `${stats.avgPts.toFixed(1)} avg &middot; ${stats.entries} entry` : 'Never entered';
             const checkedFree = p.freeEntry === 'Yes' ? 'checked' : '';
+            const checkedPaid = (p.entryFeePaid > 0 && p.freeEntry !== 'Yes') ? 'checked' : '';
+
             const freeLabelStyle = p.freeEntry === 'Yes' ? 'color: var(--accent-gold); font-weight: 700;' : 'color: var(--text-secondary);';
+            const paidLabelStyle = (p.entryFeePaid > 0 && p.freeEntry !== 'Yes') ? 'color: var(--accent-cyan); font-weight: 700;' : 'color: var(--text-secondary);';
+            const paidDisabled = p.freeEntry === 'Yes' ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : '';
+
             const rowBackground = isBountyTarget ? 'background: hsla(0, 85%, 50%, 0.08); border-color: var(--accent-red);' : 'background: hsla(222, 20%, 15%, 0.35);';
             const bountyTargetBadge = isBountyTarget ? `<span style="padding: 0.15rem 0.4rem; font-size: 0.72rem; font-weight: 700; color: var(--accent-red); background: hsla(0, 85%, 50%, 0.15); border: 1px solid hsla(0, 85%, 50%, 0.25); border-radius: 4px; margin-left: 0.4rem;">🎯 BOUNTY TARGET</span>` : '';
             
@@ -3989,6 +4061,10 @@ async function renderActiveSession(sessionId) {
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
+                        <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer; ${paidLabelStyle}">
+                            <input type="checkbox" class="paid-entry-check" ${checkedPaid} ${paidDisabled} onclick="togglePlayerPaidStatus('${s.sessionId}', '${p.player.replace(/'/g, "\\'")}', this.checked)" style="width: 14px; height: 14px; cursor: pointer;">
+                            <span>Paid</span>
+                        </label>
                         <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer; ${freeLabelStyle}">
                             <input type="checkbox" class="free-entry-check" ${checkedFree} onclick="togglePlayerFreeEntry('${s.sessionId}', '${p.player.replace(/'/g, "\\'")}', this.checked)" style="width: 14px; height: 14px; cursor: pointer;">
                             <span>Free</span>
@@ -4002,9 +4078,13 @@ async function renderActiveSession(sessionId) {
         participantsHtml += `</div>`;
     }
     
+
+
     let bountyTextHtml = '';
     if (s.bountyAmount > 0) {
-        bountyTextHtml = `<div style="font-size: 0.8rem; color: var(--accent-red); font-weight: 700; margin-top: 0.25rem;">🎯 Bounty: $${s.bountyAmount.toFixed(0)} on ${s.bountyTarget || 'N/A'}</div>`;
+        const bountyTargetsList = s.bountyTarget ? s.bountyTarget.split(',').map(n => n.trim()).filter(Boolean) : [];
+        const labelEach = bountyTargetsList.length > 1 ? ' each' : '';
+        bountyTextHtml = `<div style="font-size: 0.8rem; color: var(--accent-red); font-weight: 700; margin-top: 0.25rem;">🎯 Bounty: $${s.bountyAmount.toFixed(0)}${labelEach} on ${s.bountyTarget || 'N/A'}</div>`;
     }
     
     container.innerHTML = `
@@ -4018,7 +4098,7 @@ async function renderActiveSession(sessionId) {
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
                 <div>
                     <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
-                        🎟️ ${s.tournament} Check-In
+                        🎟️ ${s.tournament} Registration
                         <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--border-color); border-radius: 4px; color: var(--text-secondary); text-transform: uppercase;">${s.status}</span>
                     </h2>
                     <span style="font-size: 0.8rem; color: var(--text-secondary);">Entry Fee: $${s.entryFee.toFixed(0)} &middot; Created ${formatBetDate(s.createdAt)}</span>
@@ -4047,10 +4127,10 @@ async function renderActiveSession(sessionId) {
                 <select id="checkin-player-select" class="form-select" style="flex: 1;" required>
                     ${dropdownHtml}
                 </select>
-                <button type="submit" class="action-btn" style="padding: 0 1rem; height: 38px; line-height: 38px; border-radius: 8px;">✅ Check In</button>
+                <button type="submit" class="action-btn" style="padding: 0 1rem; height: 38px; line-height: 38px; border-radius: 8px;">✅ Register</button>
             </form>
             
-            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem; margin-bottom: 0.5rem;">Checked In Players (${participants.length})</h3>
+            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem; margin-bottom: 0.5rem;">Registered Players (${participants.length})</h3>
             ${participantsHtml}
         </div>
     `;
@@ -4075,7 +4155,7 @@ async function togglePlayerFreeEntry(sessionId, player, isFree) {
         }
     }
     
-    const entryFeePaid = isFree ? 0 : s.entryFee;
+    const entryFeePaid = 0; // Free entry means $0 paid. Unchecking Free returns them to Unpaid ($0).
     const freeVal = isFree ? 'Yes' : '';
     
     const pLocal = checkInPlayersData.find(p => p.sessionId === sessionId && p.player === player);
@@ -4116,12 +4196,13 @@ async function handleCheckInPlayerSubmit(e, sessionId, tournament, entryFee) {
     const exists = checkInPlayersData.some(p => p.sessionId === sessionId && p.player === player);
     if (exists) return;
     
+    // Register player as unpaid (0 paid) by default
     checkInPlayersData.push({
         sessionId: sessionId,
         tournament: tournament,
         year: 2026,
         player: player,
-        entryFeePaid: entryFee,
+        entryFeePaid: 0,
         freeEntry: '',
         removed: '',
         checkedInAt: new Date().toISOString()
@@ -4133,7 +4214,7 @@ async function handleCheckInPlayerSubmit(e, sessionId, tournament, entryFee) {
         sessionId: sessionId,
         tournament: tournament,
         player: player,
-        entryFeePaid: entryFee,
+        entryFeePaid: 0,
         year: 2026
     };
     
@@ -4202,6 +4283,69 @@ async function updateSessionStatus(sessionId, status) {
     }
 }
 
+async function deleteSession(sessionId) {
+    if (!confirm("Are you sure you want to delete this draft event? This cannot be undone.")) return;
+
+    // Remove locally
+    checkInSessionsData = checkInSessionsData.filter(x => x.sessionId !== sessionId);
+    closeActiveSession();
+
+    const payload = {
+        action: 'update_session_status',
+        sessionId: sessionId,
+        status: 'deleted'
+    };
+
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        delete googleSheetsCache['CHECK_IN_SESSIONS'];
+        loadCheckInSessions();
+    } catch (e) {
+        console.error("Delete session failed:", e);
+    }
+}
+
+async function togglePlayerPaidStatus(sessionId, player, isPaid) {
+    const s = checkInSessionsData.find(x => x.sessionId === sessionId);
+    if (!s) return;
+
+    const entryFeePaid = isPaid ? s.entryFee : 0;
+    const freeVal = ''; // Toggling paid to true or false resets free status
+
+    const pLocal = checkInPlayersData.find(p => p.sessionId === sessionId && p.player === player);
+    if (pLocal) {
+        pLocal.entryFeePaid = entryFeePaid;
+        pLocal.freeEntry = freeVal;
+    }
+    renderActiveSession(sessionId);
+
+    const payload = {
+        action: 'toggle_free_entry',
+        sessionId: sessionId,
+        player: player,
+        entryFeePaid: entryFeePaid,
+        freeEntry: freeVal
+    };
+
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        });
+        delete googleSheetsCache['CHECK_IN'];
+        loadCheckInSessions();
+    } catch (e) {
+        console.error("Paid status toggle failed:", e);
+    }
+}
+
 // Show settle payouts modal
 function showSettlePayoutsModal(sessionId) {
     const s = checkInSessionsData.find(x => x.sessionId === sessionId);
@@ -4214,7 +4358,8 @@ function showSettlePayoutsModal(sessionId) {
     }
     
     const totalCollected = participants.reduce((sum, p) => sum + p.entryFeePaid, 0);
-    const activePool = totalCollected - s.bountyAmount;
+    const bountyTargetsList = s.bountyTarget ? s.bountyTarget.split(',').map(n => n.trim()).filter(Boolean) : [];
+    const activePool = totalCollected - (s.bountyAmount * bountyTargetsList.length);
     
     let winnersListHtml = '';
     participants.forEach(p => {
@@ -4317,6 +4462,9 @@ async function confirmSettlePayouts(sessionId) {
         `;
     }
     
+    const bountyTargetsList = s.bountyTarget ? s.bountyTarget.split(',').map(n => n.trim()).filter(Boolean) : [];
+    const totalBounty = s.bountyAmount * bountyTargetsList.length;
+
     const payload = {
         action: 'save_payouts',
         sessionId: sessionId,
@@ -4325,7 +4473,7 @@ async function confirmSettlePayouts(sessionId) {
         winners: checkedWinners,
         winShare: winShare,
         bountyWinner: bountyWinner,
-        bountyAmount: s.bountyAmount
+        bountyAmount: totalBounty
     };
     
     try {
@@ -4451,6 +4599,5 @@ function renderWinningsLeaderboard() {
     
     tableContainer.appendChild(card);
 }
-
 
 

@@ -139,17 +139,29 @@ for f in excel_files:
                 pts_col = c
                 break
                 
+        # Find score column (Score, Games Won, Games, Result)
         score_col = None
         for c in ['Score', 'Games Won', 'Games', 'Result', 'Points Won', 'Wins']:
             if c in df_ev.columns:
                 score_col = c
                 break
+
+        # Find money columns (new for 2026+)
+        entry_fee_col = next((c for c in ['Entry Fee', 'ENTRY FEE', 'Entry', 'Fee'] if c in df_ev.columns), None)
+        winnings_col  = next((c for c in ['Winnings', 'WINNINGS', 'Prize', 'Payout'] if c in df_ev.columns), None)
+        bounty_col    = next((c for c in ['Bounty', 'BOUNTY', 'Bounty Won', 'BOUNTY WON'] if c in df_ev.columns), None)
                 
         for idx, row in df_ev.iterrows():
             name = row['Name_clean']
             place = row.get('Place', np.nan)
             pts_val = row.get(pts_col, 0.0) if pts_col else 0.0
             score_val = row.get(score_col, np.nan) if score_col else np.nan
+
+            # Money fields (default 0 if columns absent or blank)
+            entry_fee = safe_float(row.get(entry_fee_col, 0.0)) if entry_fee_col else 0.0
+            winnings  = safe_float(row.get(winnings_col, 0.0))  if winnings_col  else 0.0
+            bounty    = safe_float(row.get(bounty_col, 0.0))    if bounty_col    else 0.0
+            net_money = round(winnings + bounty - entry_fee, 2)
             
             granular_entries.append({
                 'Year': year,
@@ -157,7 +169,11 @@ for f in excel_files:
                 'Player Name': name,
                 'Place': str(place).strip() if pd.notna(place) else 'N/A',
                 'Score': str(score_val).strip() if pd.notna(score_val) else 'N/A',
-                'PC Points': safe_float(pts_val)
+                'PC Points': safe_float(pts_val),
+                'EntryFee': entry_fee,
+                'Winnings': winnings,
+                'Bounty': bounty,
+                'NetMoney': net_money
             })
 
 df_granular = pd.DataFrame(granular_entries)
@@ -183,10 +199,18 @@ for player in unique_players:
     pts_2023 = float(player_yearly[player_yearly['Year'] == 2023]['Cup Points'].sum()) if 2023 in active_years else np.nan
     pts_2024 = float(player_yearly[player_yearly['Year'] == 2024]['Cup Points'].sum()) if 2024 in active_years else np.nan
     pts_2025 = float(player_yearly[player_yearly['Year'] == 2025]['Cup Points'].sum()) if 2025 in active_years else np.nan
+    pts_2026 = float(player_yearly[player_yearly['Year'] == 2026]['Cup Points'].sum()) if 2026 in active_years else np.nan
     
     lifetime_cup_pts = float(player_yearly['Cup Points'].sum())
     total_tourneys = int(player_granular.shape[0])
     avg_cup_pts = lifetime_cup_pts / years_competed if years_competed > 0 else 0.0
+
+    # Money stats (sum from granular entries where money columns exist, i.e. non-zero entry fees)
+    money_entries = player_granular[player_granular['EntryFee'] > 0] if 'EntryFee' in player_granular.columns else pd.DataFrame()
+    tourney_entry_fees  = float(player_granular['EntryFee'].sum())  if 'EntryFee'  in player_granular.columns else 0.0
+    tourney_winnings    = float(player_granular['Winnings'].sum())  if 'Winnings'  in player_granular.columns else 0.0
+    tourney_bounty      = float(player_granular['Bounty'].sum())    if 'Bounty'    in player_granular.columns else 0.0
+    tourney_net         = float(player_granular['NetMoney'].sum())  if 'NetMoney'  in player_granular.columns else 0.0
     
     lifetime_stats.append({
         'PlayerName': player,
@@ -197,7 +221,12 @@ for player in unique_players:
         '2022': pts_2022,
         '2023': pts_2023,
         '2024': pts_2024,
-        '2025': pts_2025
+        '2025': pts_2025,
+        '2026': pts_2026,
+        'TourneyMoneyNet': round(tourney_net, 2),
+        'TourneyEntryFeesPaid': round(tourney_entry_fees, 2),
+        'TourneyWinnings': round(tourney_winnings, 2),
+        'TourneyBountyEarnings': round(tourney_bounty, 2)
     })
 
 df_lifetime = pd.DataFrame(lifetime_stats)
