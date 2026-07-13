@@ -3793,16 +3793,18 @@ function showCreateSessionModal() {
         });
     }
     
-    // Populate bounty target dropdown
-    const targetSelect = document.getElementById('session-bounty-target-select');
-    if (targetSelect) {
-        targetSelect.innerHTML = '<option value="">-- None --</option>';
+    // Populate bounty target checklist
+    const targetList = document.getElementById('session-bounty-targets-list');
+    if (targetList) {
+        targetList.innerHTML = '';
         const names = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
         names.forEach(n => {
-            const opt = document.createElement('option');
-            opt.value = n;
-            opt.textContent = n;
-            targetSelect.appendChild(opt);
+            targetList.innerHTML += `
+                <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
+                    <input type="checkbox" class="session-bounty-target-check" value="${n.replace(/"/g, '&quot;')}" style="width: 14px; height: 14px; cursor: pointer;">
+                    <span>${n}</span>
+                </label>
+            `;
         });
     }
     
@@ -3821,7 +3823,8 @@ async function handleCreateSessionSubmit(e) {
     
     const tournament = document.getElementById('session-tournament-select').value;
     const entryFee = parseFloat(document.getElementById('session-entry-fee').value) || 0.0;
-    const bountyTarget = document.getElementById('session-bounty-target-select').value;
+    const checkedBountyTargets = Array.from(document.querySelectorAll('.session-bounty-target-check:checked')).map(c => c.value);
+    const bountyTarget = checkedBountyTargets.join(', ');
     const bountyAmount = parseFloat(document.getElementById('session-bounty-amount').value) || 0.0;
     
     if (btn) {
@@ -3966,7 +3969,8 @@ async function renderActiveSession(sessionId) {
     } else {
         participantsHtml = `<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">`;
         participants.forEach(p => {
-            const isBountyTarget = s.bountyTarget === p.player;
+            const bountyTargetsList = s.bountyTarget ? s.bountyTarget.split(',').map(n => n.trim()) : [];
+            const isBountyTarget = bountyTargetsList.includes(p.player);
             const stats = getTourneyGradeForPlayer(p.player, s.tournament);
             
             let statsLabel = stats.entries > 0 ? `${stats.avgPts.toFixed(1)} avg &middot; ${stats.entries} entry` : 'Never entered';
@@ -4224,18 +4228,26 @@ function showSettlePayoutsModal(sessionId) {
     
     let bountyHunterHtml = '';
     if (s.bountyAmount > 0) {
-        let bountyOptions = `<option value="">-- No One / Target Survived --</option>`;
+        const bountyTargetsList = s.bountyTarget ? s.bountyTarget.split(',').map(n => n.trim()) : [];
+        let bountyHuntersChecklistHtml = '';
+        
         participants.forEach(p => {
-            if (p.player !== s.bountyTarget) {
-                bountyOptions += `<option value="${p.player.replace(/"/g, '&quot;')}">${p.player}</option>`;
+            if (!bountyTargetsList.includes(p.player)) {
+                bountyHuntersChecklistHtml += `
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        <input type="checkbox" class="settle-bounty-hunter-check" value="${p.player.replace(/"/g, '&quot;')}" style="width: 18px; height: 18px;">
+                        <span>${p.player}</span>
+                    </label>
+                `;
             }
         });
+        
         bountyHunterHtml = `
             <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
-                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Bounty Winner (Who eliminated ${s.bountyTarget}?)</label>
-                <select class="form-select" id="settle-bounty-winner-select">
-                    ${bountyOptions}
-                </select>
+                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">Bounty Winner(s) (Who eliminated ${s.bountyTarget}?)</label>
+                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 120px; overflow-y: auto; padding-right: 0.25rem;">
+                    ${bountyHuntersChecklistHtml}
+                </div>
             </div>
         `;
     }
@@ -4291,11 +4303,8 @@ async function confirmSettlePayouts(sessionId) {
     const distPool = parseFloat(document.getElementById('settle-pot-override').value) || 0.0;
     const winShare = distPool / checkedWinners.length;
     
-    let bountyWinner = '';
-    const bountySelect = document.getElementById('settle-bounty-winner-select');
-    if (bountySelect) {
-        bountyWinner = bountySelect.value;
-    }
+    const checkedBountyHunters = Array.from(document.querySelectorAll('.settle-bounty-hunter-check:checked')).map(c => c.value);
+    const bountyWinner = checkedBountyHunters.join(', ');
     
     closeSettlePayoutsModal();
     
