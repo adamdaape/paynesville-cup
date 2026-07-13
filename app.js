@@ -331,6 +331,16 @@ async function ensure2026EventDataLoaded(tournamentName) {
     });
 }
 
+async function ensureAll2026EventMoneyDataLoaded() {
+    await Promise.all(MAIN_TOURNAMENTS.map(async (tournamentName) => {
+        try {
+            await ensure2026EventDataLoaded(tournamentName);
+        } catch (e) {
+            console.warn(`Could not load 2026 money data for ${tournamentName}:`, e);
+        }
+    }));
+}
+
 // Fetch data from cup_data.json
 async function fetchCupData() {
     try {
@@ -964,7 +974,7 @@ async function renderTournamentTable() {
     table.innerHTML = html;
     
     // Render winnings leaderboard at the bottom of the tournament standings
-    renderWinningsLeaderboard();
+    await renderWinningsLeaderboard();
 }
 
 // ----------------- RENDER VEGAS ODDS BOARD -----------------
@@ -4500,7 +4510,7 @@ async function confirmSettlePayouts(sessionId) {
 }
 
 // Render winnings leaderboard at the bottom of the tournament view
-function renderWinningsLeaderboard() {
+async function renderWinningsLeaderboard() {
     const tableContainer = document.getElementById('leaderboard-table-container');
     if (!tableContainer) return;
     
@@ -4509,6 +4519,19 @@ function renderWinningsLeaderboard() {
     if (existingCard) {
         existingCard.remove();
     }
+
+    const card = document.createElement('div');
+    card.id = 'winnings-leaderboard-card';
+    card.className = 'card';
+    card.style.cssText = 'margin-top: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--border-radius); text-align: left;';
+    card.innerHTML = `
+        <div style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">
+            <span class="loading-spinner">⏳</span> Loading 2026 tournament money tracker...
+        </div>
+    `;
+    tableContainer.appendChild(card);
+
+    await ensureAll2026EventMoneyDataLoaded();
     
     const stats = {};
     const names = cupData.lifetime.map(p => p.PlayerName);
@@ -4516,39 +4539,38 @@ function renderWinningsLeaderboard() {
         stats[n] = { name: n, entries: 0, paidIn: 0, won: 0, net: 0 };
     });
     
-    const completedSessionIds = checkInSessionsData.filter(s => s.status === 'complete').map(s => s.sessionId);
-    
-    // Calculate paid in and entries from CHECK_IN data
-    checkInPlayersData.forEach(p => {
-        if (completedSessionIds.includes(p.sessionId)) {
-            if (!stats[p.player]) {
-                stats[p.player] = { name: p.player, entries: 0, paidIn: 0, won: 0, net: 0 };
-            }
-            stats[p.player].entries++;
-            stats[p.player].paidIn += p.entryFeePaid;
+    const moneyEntries = cupData.granular.filter(g => g.Year === 2026);
+
+    moneyEntries.forEach(entry => {
+        const name = entry['Player Name'];
+        if (!name) return;
+
+        if (!stats[name]) {
+            stats[name] = { name: name, entries: 0, paidIn: 0, won: 0, net: 0 };
         }
+
+        const entryFee = Number(entry.EntryFee ?? entry['Entry Fee'] ?? 0) || 0;
+        const winnings = Number(entry.Winnings ?? 0) || 0;
+        const bounty = Number(entry.Bounty ?? 0) || 0;
+        const calculatedWon = winnings + bounty;
+        const netMoney = entry.NetMoney ?? entry['Net Money'];
+        const calculatedNet = netMoney !== undefined && netMoney !== null && netMoney !== ''
+            ? Number(netMoney) || 0
+            : calculatedWon - entryFee;
+
+        stats[name].entries++;
+        stats[name].paidIn += entryFee;
+        stats[name].won += calculatedWon;
+        stats[name].net += calculatedNet;
     });
     
-    // Calculate amount won from PAYOUTS data
-    checkInPayoutsData.forEach(p => {
-        if (completedSessionIds.includes(p.sessionId)) {
-            if (!stats[p.player]) {
-                stats[p.player] = { name: p.player, entries: 0, paidIn: 0, won: 0, net: 0 };
-            }
-            stats[p.player].won += p.amountWon;
-        }
-    });
-    
-    const boardData = Object.values(stats).map(p => {
-        p.net = p.won - p.paidIn;
-        return p;
-    }).filter(p => p.entries > 0 || p.won > 0);
+    const boardData = Object.values(stats).filter(p => p.entries > 0 || p.won > 0);
     
     boardData.sort((a,b) => b.net - a.net || b.won - a.won);
     
     let rowsHtml = '';
     if (boardData.length === 0) {
-        rowsHtml = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 1.5rem; font-style: italic;">No tournament payouts logged yet.</td></tr>`;
+        rowsHtml = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 1.5rem; font-style: italic;">No 2026 tournament money rows loaded yet.</td></tr>`;
     } else {
         boardData.forEach(p => {
             const netClass = p.net > 0 ? 'positive' : p.net < 0 ? 'negative' : 'neutral';
@@ -4567,17 +4589,12 @@ function renderWinningsLeaderboard() {
         });
     }
     
-    const card = document.createElement('div');
-    card.id = 'winnings-leaderboard-card';
-    card.className = 'card';
-    card.style.cssText = 'margin-top: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--border-radius); text-align: left;';
-    
     card.innerHTML = `
         <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-primary);">
             💰 2026 Season Tourney Winnings
         </h3>
         <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
-            This ledger tracks aggregate entry fees and prize payouts for the 2026 season's official events (excluding side wagers).
+            This ledger tracks aggregate entry fees, winnings, bounties, and net money from the 2026 tournament result sheets.
         </p>
         <div class="table-container">
              <table class="data-table">
@@ -4596,8 +4613,5 @@ function renderWinningsLeaderboard() {
              </table>
         </div>
     `;
-    
-    tableContainer.appendChild(card);
 }
-
 
