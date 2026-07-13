@@ -6,7 +6,7 @@ let googleSheetsCache = {};
 
 // Global State
 let cupData = null;
-let currentTab = 'lifetime';
+let currentTab = 'yearly';
 let selectedYear = 2026; // Default to the active 2026 season
 let selectedTournament = '3-CLUB CHALLENGE';
 let searchQuery = '';
@@ -405,7 +405,7 @@ async function fetchCupData() {
         populateMetadata();
         
         // Initialize with default tab
-        switchTab('lifetime');
+        switchTab('yearly');
     } catch (e) {
         console.error("Failed to load cup data: ", e);
         document.getElementById('main-data-table').innerHTML = `

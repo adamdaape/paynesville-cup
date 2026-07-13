@@ -21,8 +21,8 @@
                 <span class="brand-text">Paynesville Cup</span>
             </div>
             <nav class="nav-menu">
-                <button class="nav-item active" id="btn-lifetime" onclick="switchTab('lifetime')">📈 Lifetime Standings</button>
-                <button class="nav-item" id="btn-yearly" onclick="switchTab('yearly')">📅 Yearly Standings</button>
+                <button class="nav-item" id="btn-lifetime" onclick="switchTab('lifetime')">📈 Lifetime Standings</button>
+                <button class="nav-item active" id="btn-yearly" onclick="switchTab('yearly')">📅 Yearly Standings</button>
                 <button class="nav-item" id="btn-bubble" onclick="switchTab('bubble')">🎈 Bubble Watch</button>
                 <button class="nav-item" id="btn-tournaments" onclick="switchTab('tournaments')">🏆 Tournaments</button>
                 <button class="nav-item" id="btn-rivalry" onclick="switchTab('rivalry')">🥊 Cousin Rivalry</button>
@@ -35,8 +35,8 @@
             <!-- Header -->
             <header class="main-header">
                 <div class="header-title">
-                    <h1 id="page-title">Paynesville Cup Master Roster</h1>
-                    <p class="subtitle" id="page-subtitle">Historical results, active streaks, and player statistics across 2022-2026.</p>
+                    <h1 id="page-title">Yearly Historical Standings</h1>
+                    <p class="subtitle" id="page-subtitle">Overall placements and average scores for individual years.</p>
                 </div>
                 <div class="header-actions">
                     <input type="text" id="search-input" placeholder="🔍 Search players..." oninput="handleSearch()">
@@ -226,11 +226,11 @@ Read the live leaderboards, bubble watches, and matchups here:
 
     <!-- Mobile Bottom Navigation Bar (hidden on desktop via CSS) -->
     <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
-        <button class="mobile-nav-btn active" id="mobile-btn-lifetime" onclick="switchTab('lifetime')">
+        <button class="mobile-nav-btn" id="mobile-btn-lifetime" onclick="switchTab('lifetime')">
             <span class="mobile-nav-icon">📈</span>
             <span class="mobile-nav-label">All Time</span>
         </button>
-        <button class="mobile-nav-btn" id="mobile-btn-yearly" onclick="switchTab('yearly')">
+        <button class="mobile-nav-btn active" id="mobile-btn-yearly" onclick="switchTab('yearly')">
             <span class="mobile-nav-icon">📅</span>
             <span class="mobile-nav-label">Yearly</span>
         </button>
