@@ -59,6 +59,9 @@ def safe_float(val):
     val_str = str(val).strip()
     if val_str.startswith('#') or 'DIV' in val_str.upper() or 'VALUE' in val_str.upper():
         return 0.0
+    val_str = re.sub(r'[$,\s]', '', val_str)
+    if val_str in ('', '-'):
+        return 0.0
     try:
         return float(val_str)
     except ValueError:

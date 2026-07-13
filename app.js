@@ -86,6 +86,17 @@ function parseCSV(text) {
     return lines;
 }
 
+function parseMoneyValue(value) {
+    if (value === null || value === undefined || value === '') return 0.0;
+    if (typeof value === 'number') return value;
+
+    const cleaned = String(value).trim().replace(/[$,\s]/g, '');
+    if (!cleaned || cleaned === '-') return 0.0;
+
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0.0;
+}
+
 const NAME_MAPPINGS = {
     "Katie Bonicatto": "Katie Breviu",
     "Kate Breviu": "Katie Breviu",
@@ -295,9 +306,9 @@ async function ensure2026EventDataLoaded(tournamentName) {
             if (bountyIdx !== -1) break;
         }
 
-        const entryFee = entryFeeIdx !== -1 ? (parseFloat(row[entryFeeIdx]) || 0.0) : 0.0;
-        const winnings  = winningsIdx  !== -1 ? (parseFloat(row[winningsIdx])  || 0.0) : 0.0;
-        const bounty    = bountyIdx    !== -1 ? (parseFloat(row[bountyIdx])    || 0.0) : 0.0;
+        const entryFee = entryFeeIdx !== -1 ? parseMoneyValue(row[entryFeeIdx]) : 0.0;
+        const winnings  = winningsIdx  !== -1 ? parseMoneyValue(row[winningsIdx])  : 0.0;
+        const bounty    = bountyIdx    !== -1 ? parseMoneyValue(row[bountyIdx])    : 0.0;
         const netMoney  = Math.round((winnings + bounty - entryFee) * 100) / 100;
 
         entries2026.push({
@@ -320,14 +331,46 @@ async function ensure2026EventDataLoaded(tournamentName) {
     cupData.granular = cupData.granular.filter(g => !(g.Year === 2026 && g.Tournament === tournamentName.toUpperCase()));
     cupData.granular = cupData.granular.concat(entries2026);
 
-    // Recalculate per-player money totals from all 2026 granular entries
+    recalculateTournamentMoneyTotals();
+}
+
+function getTournamentEntryFee(entry) {
+    return parseMoneyValue(entry.EntryFee ?? entry['Entry Fee'] ?? 0);
+}
+
+function getTournamentWinnings(entry) {
+    return parseMoneyValue(entry.Winnings ?? 0);
+}
+
+function getTournamentBounty(entry) {
+    return parseMoneyValue(entry.Bounty ?? 0);
+}
+
+function getTournamentNetMoney(entry) {
+    const netMoney = entry.NetMoney ?? entry['Net Money'];
+    if (netMoney !== undefined && netMoney !== null && netMoney !== '') {
+        return parseMoneyValue(netMoney);
+    }
+
+    return getTournamentWinnings(entry) + getTournamentBounty(entry) - getTournamentEntryFee(entry);
+}
+
+function formatMoneyAmount(amount, decimals = 2) {
+    if (amount > 0) return `+$${amount.toFixed(decimals)}`;
+    if (amount < 0) return `-$${Math.abs(amount).toFixed(decimals)}`;
+    return `$${amount.toFixed(decimals)}`;
+}
+
+function recalculateTournamentMoneyTotals() {
+    if (!cupData) return;
+
     const granular2026 = cupData.granular.filter(g => g.Year === 2026);
     cupData.lifetime.forEach(p => {
         const playerEntries = granular2026.filter(g => g['Player Name'] === p.PlayerName);
-        p.TourneyMoneyNet          = Math.round(playerEntries.reduce((s, g) => s + (g.NetMoney  || 0), 0) * 100) / 100;
-        p.TourneyEntryFeesPaid     = Math.round(playerEntries.reduce((s, g) => s + (g.EntryFee  || 0), 0) * 100) / 100;
-        p.TourneyWinnings          = Math.round(playerEntries.reduce((s, g) => s + (g.Winnings  || 0), 0) * 100) / 100;
-        p.TourneyBountyEarnings    = Math.round(playerEntries.reduce((s, g) => s + (g.Bounty    || 0), 0) * 100) / 100;
+        p.TourneyMoneyNet          = Math.round(playerEntries.reduce((s, g) => s + getTournamentNetMoney(g), 0) * 100) / 100;
+        p.TourneyEntryFeesPaid     = Math.round(playerEntries.reduce((s, g) => s + getTournamentEntryFee(g), 0) * 100) / 100;
+        p.TourneyWinnings          = Math.round(playerEntries.reduce((s, g) => s + getTournamentWinnings(g), 0) * 100) / 100;
+        p.TourneyBountyEarnings    = Math.round(playerEntries.reduce((s, g) => s + getTournamentBounty(g), 0) * 100) / 100;
     });
 }
 
@@ -339,6 +382,7 @@ async function ensureAll2026EventMoneyDataLoaded() {
             console.warn(`Could not load 2026 money data for ${tournamentName}:`, e);
         }
     }));
+    recalculateTournamentMoneyTotals();
 }
 
 // Fetch data from cup_data.json
@@ -542,8 +586,20 @@ function getSortIndicator(currentKey, activeKey, isAsc) {
 }
 
 // ----------------- RENDER LIFETIME LEADERBOARD -----------------
-function renderLifetimeTable() {
+async function renderLifetimeTable() {
     if (!cupData) return;
+
+    const table = document.getElementById('main-data-table');
+    table.innerHTML = `
+        <tbody>
+            <tr>
+                <td colspan="12" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                    <span class="loading-spinner">⏳</span> Loading 2026 tournament money from Google Sheets...
+                </td>
+            </tr>
+        </tbody>
+    `;
+    await ensureAll2026EventMoneyDataLoaded();
     
     // Calculate historic Paynesville Cup Champions
     const champions = new Set();
@@ -555,8 +611,6 @@ function renderLifetimeTable() {
             champions.add(yearData[0].Name);
         }
     });
-    
-    const table = document.getElementById('main-data-table');
     
     // Sort logic
     let sortedData = [...cupData.lifetime];
@@ -620,9 +674,8 @@ function renderLifetimeTable() {
             const moneyNet = p.TourneyMoneyNet;
             let cellMoney = '—';
             let moneyStyle = 'color: var(--text-secondary); opacity: 0.5;';
-            if (moneyNet !== null && moneyNet !== undefined && p.TourneyEntryFeesPaid > 0) {
-                const sign = moneyNet >= 0 ? '+' : '';
-                cellMoney = `${sign}$${moneyNet.toFixed(2)}`;
+            if (moneyNet !== null && moneyNet !== undefined && ((p.TourneyEntryFeesPaid || 0) > 0 || moneyNet !== 0)) {
+                cellMoney = formatMoneyAmount(moneyNet);
                 moneyStyle = moneyNet >= 0
                     ? 'color: hsl(145, 70%, 55%); font-weight: 700;'
                     : 'color: var(--accent-red); font-weight: 700;';
@@ -664,13 +717,31 @@ function filterYear(year) {
     renderYearlyTable();
 }
 
-function renderYearlyTable() {
+async function renderYearlyTable() {
     if (!cupData) return;
     
     const table = document.getElementById('main-data-table');
+
+    table.innerHTML = `
+        <tbody>
+            <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                    <span class="loading-spinner">⏳</span> Loading tournament money from Google Sheets...
+                </td>
+            </tr>
+        </tbody>
+    `;
+    await ensureAll2026EventMoneyDataLoaded();
     
     // Yearly data filtering by active year
-    let yearlyData = cupData.yearly.filter(p => p.Year === selectedYear);
+    let yearlyData = cupData.yearly.filter(p => p.Year === selectedYear).map(p => {
+        const playerEntries = cupData.granular.filter(g => g.Year === selectedYear && g['Player Name'] === p.Name);
+        return {
+            ...p,
+            'Tourney $ Net': Math.round(playerEntries.reduce((sum, entry) => sum + getTournamentNetMoney(entry), 0) * 100) / 100,
+            'Tourney Entry Fees Paid': Math.round(playerEntries.reduce((sum, entry) => sum + getTournamentEntryFee(entry), 0) * 100) / 100
+        };
+    });
     
     // Sort logic
     yearlyData.sort((a, b) => {
@@ -708,13 +779,14 @@ function renderYearlyTable() {
                 <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setYearlySort('Average Score')" title="Average points per tournament.">Avg ${getSortIndicator('Average Score', yearlySortKey, yearlySortAscending)}</th>
                 <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setYearlySort('Tournaments Entered')" title="Total tournaments played.">Entries ${getSortIndicator('Tournaments Entered', yearlySortKey, yearlySortAscending)}</th>
                 <th style="text-align: right; cursor: pointer; white-space: nowrap;" onclick="setYearlySort('Total Score')" title="Total uncapped score.">Total ${getSortIndicator('Total Score', yearlySortKey, yearlySortAscending)}</th>
+                <th style="text-align: right; cursor: pointer; white-space: nowrap; color: var(--accent-gold);" onclick="setYearlySort('Tourney $ Net')" title="Net tournament money for this year.">💰 $ Net ${getSortIndicator('Tourney $ Net', yearlySortKey, yearlySortAscending)}</th>
             </tr>
         </thead>
         <tbody>
     `;
     
     if (filtered.length === 0) {
-        html += `<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No players found matching your search.</td></tr>`;
+        html += `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No players found matching your search.</td></tr>`;
     } else {
         filtered.forEach(p => {
             const place = p.Place;
@@ -724,6 +796,16 @@ function renderYearlyTable() {
             if (parsedNum === 1) badgeClass = 'rank-1';
             else if (parsedNum === 2) badgeClass = 'rank-2';
             else if (parsedNum === 3) badgeClass = 'rank-3';
+
+            const moneyNet = p['Tourney $ Net'];
+            let cellMoney = '—';
+            let moneyStyle = 'color: var(--text-secondary); opacity: 0.5;';
+            if (p['Tourney Entry Fees Paid'] > 0 || moneyNet !== 0) {
+                cellMoney = formatMoneyAmount(moneyNet);
+                moneyStyle = moneyNet >= 0
+                    ? 'color: hsl(145, 70%, 55%); font-weight: 700;'
+                    : 'color: var(--accent-red); font-weight: 700;';
+            }
             
             html += `
                 <tr>
@@ -733,6 +815,7 @@ function renderYearlyTable() {
                     <td style="text-align: right; color: var(--accent-cyan); font-weight: 600;">${p['Average Score'].toFixed(1)}</td>
                     <td style="text-align: right;">${p['Tournaments Entered']}</td>
                     <td style="text-align: right;">${p['Total Score'].toFixed(1)}</td>
+                    <td style="text-align: right; ${moneyStyle}">${cellMoney}</td>
                 </tr>
             `;
         });
@@ -1889,9 +1972,8 @@ function showPlayerCard(name) {
     }
     
     const moneyNet = p.TourneyMoneyNet;
-    const hasMoney  = (p.TourneyEntryFeesPaid || 0) > 0;
-    const moneySign = hasMoney ? (moneyNet >= 0 ? '+' : '') : '';
-    const moneyVal  = hasMoney ? `${moneySign}$${moneyNet.toFixed(2)}` : '—';
+    const hasMoney  = (p.TourneyEntryFeesPaid || 0) > 0 || moneyNet !== 0;
+    const moneyVal  = hasMoney ? formatMoneyAmount(moneyNet) : '—';
     const moneyColor = !hasMoney ? 'var(--text-secondary)' : moneyNet >= 0 ? 'hsl(145, 70%, 55%)' : 'var(--accent-red)';
 
     const inner = document.getElementById('player-card-inner');
@@ -4549,9 +4631,9 @@ async function renderWinningsLeaderboard() {
             stats[name] = { name: name, entries: 0, paidIn: 0, won: 0, net: 0 };
         }
 
-        const entryFee = Number(entry.EntryFee ?? entry['Entry Fee'] ?? 0) || 0;
-        const winnings = Number(entry.Winnings ?? 0) || 0;
-        const bounty = Number(entry.Bounty ?? 0) || 0;
+        const entryFee = getTournamentEntryFee(entry);
+        const winnings = getTournamentWinnings(entry);
+        const bounty = getTournamentBounty(entry);
         const calculatedWon = winnings + bounty;
         const netMoney = entry.NetMoney ?? entry['Net Money'];
         const calculatedNet = netMoney !== undefined && netMoney !== null && netMoney !== ''
@@ -4614,4 +4696,3 @@ async function renderWinningsLeaderboard() {
         </div>
     `;
 }
-
