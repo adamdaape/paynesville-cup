@@ -2019,7 +2019,7 @@ if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefin
 }
 
 // ----------------- 🎰 SIDE BETS WIDGET & DATABASE INTEGRATION -----------------
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzD4j1ZhOdJcNug0Kuyjj-jPRvUKKCsgPl-NIDGRcgOVgdo9vx_FD44xoYy6cipB7hnA/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCOCWd5tb3ojo7gnwkjZOvvTIxruajGo_Z_PIAJ5_3iyeibFF-DnJm2TpdGraTU2ppGg/exec';
 let currentBetsSubTab = 'active';
 let sideBetsData = [];
 let oddsEnabled = false;
