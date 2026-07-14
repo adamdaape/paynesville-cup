@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.3';
+const APP_VERSION = '2026.7.14.4';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -3213,11 +3213,32 @@ function calculatePaidBetNetEarnings() {
     return netEarnings;
 }
 
+function calculatePaidBetSummary() {
+    const completedBets = getSettledPaidBets();
+    const moneyExchanged = completedBets.reduce((sum, b) => {
+        const deltas = Object.values(getBetMoneyDeltas(b));
+        const positiveTotal = deltas
+            .filter(delta => delta > 0)
+            .reduce((betSum, delta) => betSum + delta, 0);
+        return sum + positiveTotal;
+    }, 0);
+
+    return {
+        count: completedBets.length,
+        moneyExchanged
+    };
+}
+
 function formatSignedMoney(value) {
     const rounded = Math.round(value * 100) / 100;
     const prefix = rounded > 0 ? '+$' : rounded < 0 ? '-$' : '$';
     const absVal = Math.abs(rounded);
     return prefix + (Number.isInteger(absVal) ? absVal.toFixed(0) : absVal.toFixed(2));
+}
+
+function formatMoney(value) {
+    const rounded = Math.round(value * 100) / 100;
+    return '$' + (Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2));
 }
 
 // Render Historical Bets and Money Board Leaderboard
@@ -3240,6 +3261,7 @@ async function renderHistoryBets(container) {
     completedBets.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
     const netEarnings = calculatePaidBetNetEarnings();
+    const paidSummary = calculatePaidBetSummary();
     
     let leaderboard = Object.entries(netEarnings)
         .map(([name, val]) => ({ name, val }))
@@ -3258,6 +3280,16 @@ async function renderHistoryBets(container) {
     let statsHtml = `
         <div class="bet-stats-container">
             <div>
+                <div style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; margin-bottom: 1.25rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.8rem;">
+                    <div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.4px;">Paid Side Bets</div>
+                        <div style="font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 800; color: var(--text-primary);">${paidSummary.count}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.4px;">Money Exchanged</div>
+                        <div style="font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 800; color: var(--accent-green);">${formatMoney(paidSummary.moneyExchanged)}</div>
+                    </div>
+                </div>
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; margin-bottom: 1.25rem; color: var(--text-primary);">💰 Net Earnings Leaderboard</h3>
                 <div class="bet-leaderboard-grid">
     `;
