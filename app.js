@@ -2187,7 +2187,7 @@ if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefin
 }
 
 // ----------------- 🎰 SIDE BETS WIDGET & DATABASE INTEGRATION -----------------
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCOCWd5tb3ojo7gnwkjZOvvTIxruajGo_Z_PIAJ5_3iyeibFF-DnJm2TpdGraTU2ppGg/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-Cp-KzmDiKX4qLK5uHRDa8-X2ihiUcr1n4pkmdqvKakDfgwUsbWO4f_7YoeacchZKdw/exec';
 let currentBetsSubTab = 'active';
 let sideBetsData = [];
 let oddsEnabled = false;
