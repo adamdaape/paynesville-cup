@@ -1,4 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
+const APP_VERSION = '2026.7.14.1';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -29,8 +30,23 @@ let activeCheckInSession = null;
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', () => {
+    enforceLatestAppVersion();
     fetchCupData();
 });
+
+async function enforceLatestAppVersion() {
+    try {
+        const response = await fetch(`app-version.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const latest = await response.json();
+        if (latest.version && latest.version !== APP_VERSION) {
+            window.location.reload();
+        }
+    } catch (e) {
+        console.warn('Could not check app version:', e);
+    }
+}
 
 // Fetch Google Sheet tab as CSV
 async function fetchGoogleSheetCSV(sheetName) {
@@ -2244,68 +2260,9 @@ async function loadSideBets() {
         };
     }).filter(b => b.id); // ignore empty rows
     
-    // Auto-resolve any tournament bets in the background
-    autoResolveTournamentBets();
-}
-
-// Background script to auto-resolve bets if tournament results have been input
-function autoResolveTournamentBets() {
-    const activeBets = sideBetsData.filter(b => b.winner === 'Pending');
-    
-    activeBets.forEach(async b => {
-        if (b.type !== 'Cup') return;
-        
-        if (b.event === 'Overall Finish') {
-            const standings2026 = cupData.yearly.filter(y => y.Year === 2026 && y.Place !== 'N/A' && y.Place !== '' && y.Place !== 'None');
-            if (standings2026.length > 0) {
-                const rA = standings2026.find(y => y.Name === b.playerA);
-                const rB = standings2026.find(y => y.Name === b.playerB);
-                if (rA && rB) {
-                    const pA = parsePlace(rA.Place);
-                    const pB = parsePlace(rB.Place);
-                    if (pA !== Infinity && pB !== Infinity) {
-                        let winner = 'Tie';
-                        if (pA < pB) winner = b.playerA;
-                        else if (pB < pA) winner = b.playerB;
-                        
-                        await executeBetActionInBackground({ action: 'resolve', id: b.id, winner: winner });
-                    }
-                }
-            }
-        } else {
-            const tourneyName = b.event.toUpperCase();
-            const tourneyEntries = cupData.granular.filter(g => g.Year === 2026 && g.Tournament === tourneyName);
-            if (tourneyEntries.length > 0) {
-                const rA = tourneyEntries.find(g => g['Player Name'] === b.playerA);
-                const rB = tourneyEntries.find(g => g['Player Name'] === b.playerB);
-                if (rA && rB) {
-                    const pA = parsePlace(rA.Place);
-                    const pB = parsePlace(rB.Place);
-                    if (pA !== Infinity && pB !== Infinity) {
-                        let winner = 'Tie';
-                        if (pA < pB) winner = b.playerA;
-                        else if (pB < pA) winner = b.playerB;
-                        
-                        await executeBetActionInBackground({ action: 'resolve', id: b.id, winner: winner });
-                    }
-                }
-            }
-        }
-    });
-}
-
-async function executeBetActionInBackground(payload) {
-    try {
-        await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(payload)
-        });
-        delete googleSheetsCache['SIDE_BETS'];
-    } catch (e) {
-        console.error("Background bet resolution failed:", e);
-    }
+    // Side bets are intentionally never auto-resolved on load. Live standings and
+    // event sheets can be provisional while the Cup is in progress, so resolving
+    // always requires a manual user action.
 }
 
 // Render the Side Bets Board
