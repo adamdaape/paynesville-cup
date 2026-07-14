@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.4';
+const APP_VERSION = '2026.7.14.5';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -2470,16 +2470,85 @@ async function renderActiveBets(container) {
     container.innerHTML = html;
 }
 
+function getSideBetPlayerGroups(names) {
+    const activePlayers = new Set();
+
+    sideBetsData.forEach(b => {
+        [b.playerA, b.playerB].forEach(side => {
+            String(side || '').split(',').map(n => n.trim()).filter(Boolean).forEach(name => {
+                if (name.toLowerCase() !== 'group pot') activePlayers.add(name);
+            });
+        });
+    });
+
+    const active = names.filter(n => activePlayers.has(n)).sort((a, b) => a.localeCompare(b));
+    const rookies = names.filter(n => !activePlayers.has(n)).sort((a, b) => a.localeCompare(b));
+
+    return { active, rookies };
+}
+
+function renderPlayerOptionGroups(groups) {
+    let html = '';
+
+    if (groups.active.length > 0) {
+        html += `<optgroup label="Active Side Betters">`;
+        groups.active.forEach(n => {
+            html += `<option value="${n}">${n}</option>`;
+        });
+        html += `</optgroup>`;
+    }
+
+    if (groups.rookies.length > 0) {
+        html += `<optgroup label="Rookies">`;
+        groups.rookies.forEach(n => {
+            html += `<option value="${n}">${n}</option>`;
+        });
+        html += `</optgroup>`;
+    }
+
+    return html;
+}
+
+function renderPlayerCheckboxGroups(groups, inputClass, onChangeHandler) {
+    const renderGroup = (label, players) => {
+        if (players.length === 0) return '';
+
+        let html = `
+            <div style="font-size: 0.72rem; color: var(--accent-cyan); text-transform: uppercase; font-weight: 800; letter-spacing: 0.4px; padding: 0.35rem 0.25rem 0.15rem;">${label}</div>
+        `;
+        players.forEach(n => {
+            html += `
+                <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
+                    <input type="checkbox" class="${inputClass}" value="${n}" onchange="${onChangeHandler}"> ${n}
+                </label>
+            `;
+        });
+        return html;
+    };
+
+    return renderGroup('Active Side Betters', groups.active) + renderGroup('Rookies', groups.rookies);
+}
+
 // Render Create Bet Form
-function renderCreateBetForm(container) {
+async function renderCreateBetForm(container) {
     oddsEnabled = false; // reset when opening form
     wagerMode = 'single';
+
+    container.innerHTML = `
+        <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+            <span class="loading-spinner">⏳</span> Loading side bet roster...
+        </div>
+    `;
+
+    try {
+        await loadSideBets();
+    } catch (e) {
+        console.error("Error loading side bet roster:", e);
+    }
+
     const names = cupData.lifetime.map(p => p.PlayerName).sort((a,b) => a.localeCompare(b));
-    
-    let playerAOptions = '';
-    names.forEach(n => {
-        playerAOptions += `<option value="${n}">${n}</option>`;
-    });
+    const playerGroups = getSideBetPlayerGroups(names);
+    const playerAOptions = renderPlayerOptionGroups(playerGroups);
     
     let tourneyOptions = '';
     MAIN_TOURNAMENTS.forEach(t => {
@@ -2491,28 +2560,10 @@ function renderCreateBetForm(container) {
     let bulkOpponentCheckboxes = '';
     let groupPlayerCheckboxes = '';
     
-    names.forEach((n, idx) => {
-        sideACheckboxes += `
-            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
-                <input type="checkbox" class="bet-side-a-check" value="${n}" onchange="evaluateTeamMode()"> ${n}
-            </label>
-        `;
-        sideBCheckboxes += `
-            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
-                <input type="checkbox" class="bet-side-b-check" value="${n}" onchange="evaluateTeamMode()"> ${n}
-            </label>
-        `;
-        bulkOpponentCheckboxes += `
-            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
-                <input type="checkbox" class="bet-bulk-opp-check" value="${n}" onchange="handleBulkOpponentChange()"> ${n}
-            </label>
-        `;
-        groupPlayerCheckboxes += `
-            <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; cursor: pointer;">
-                <input type="checkbox" class="bet-group-player-check" value="${n}" onchange="updateGroupPotPreview()"> ${n}
-            </label>
-        `;
-    });
+    sideACheckboxes = renderPlayerCheckboxGroups(playerGroups, 'bet-side-a-check', 'evaluateTeamMode()');
+    sideBCheckboxes = renderPlayerCheckboxGroups(playerGroups, 'bet-side-b-check', 'evaluateTeamMode()');
+    bulkOpponentCheckboxes = renderPlayerCheckboxGroups(playerGroups, 'bet-bulk-opp-check', 'handleBulkOpponentChange()');
+    groupPlayerCheckboxes = renderPlayerCheckboxGroups(playerGroups, 'bet-group-player-check', 'updateGroupPotPreview()');
     
     let html = `
         <div class="card bet-form-card">
