@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.1';
+const APP_VERSION = '2026.7.14.2';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -371,6 +371,19 @@ function getTournamentNetMoney(entry) {
     return getTournamentWinnings(entry) + getTournamentBounty(entry) - getTournamentEntryFee(entry);
 }
 
+function isCompletedTournamentMoneyEntry(entry) {
+    if (!entry || entry.Year !== 2026) return false;
+
+    const place = parsePlace(entry.Place);
+    const points = Number(entry['PC Points']) || 0;
+    const winnings = getTournamentWinnings(entry);
+    const bounty = getTournamentBounty(entry);
+
+    // Entry fees alone can exist on seeded/future event sheets. Only count rows
+    // once the player has a real result or payout recorded.
+    return place !== Infinity && (points > 0 || winnings > 0 || bounty > 0);
+}
+
 function formatMoneyAmount(amount, decimals = 2) {
     if (amount > 0) return `+$${amount.toFixed(decimals)}`;
     if (amount < 0) return `-$${Math.abs(amount).toFixed(decimals)}`;
@@ -380,7 +393,7 @@ function formatMoneyAmount(amount, decimals = 2) {
 function recalculateTournamentMoneyTotals() {
     if (!cupData) return;
 
-    const granular2026 = cupData.granular.filter(g => g.Year === 2026);
+    const granular2026 = cupData.granular.filter(isCompletedTournamentMoneyEntry);
     cupData.lifetime.forEach(p => {
         const playerEntries = granular2026.filter(g => g['Player Name'] === p.PlayerName);
         p.TourneyMoneyNet          = Math.round(playerEntries.reduce((s, g) => s + getTournamentNetMoney(g), 0) * 100) / 100;
@@ -751,7 +764,11 @@ async function renderYearlyTable() {
     
     // Yearly data filtering by active year
     let yearlyData = cupData.yearly.filter(p => p.Year === selectedYear).map(p => {
-        const playerEntries = cupData.granular.filter(g => g.Year === selectedYear && g['Player Name'] === p.Name);
+        const playerEntries = cupData.granular.filter(g =>
+            g.Year === selectedYear &&
+            g['Player Name'] === p.Name &&
+            (selectedYear !== 2026 || isCompletedTournamentMoneyEntry(g))
+        );
         return {
             ...p,
             'Tourney $ Net': Math.round(playerEntries.reduce((sum, entry) => sum + getTournamentNetMoney(entry), 0) * 100) / 100,
@@ -4578,7 +4595,7 @@ async function renderWinningsLeaderboard() {
         stats[n] = { name: n, entries: 0, paidIn: 0, won: 0, net: 0 };
     });
     
-    const moneyEntries = cupData.granular.filter(g => g.Year === 2026);
+    const moneyEntries = cupData.granular.filter(isCompletedTournamentMoneyEntry);
 
     moneyEntries.forEach(entry => {
         const name = entry['Player Name'];
