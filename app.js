@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.2';
+const APP_VERSION = '2026.7.14.3';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -3130,6 +3130,96 @@ async function handleCreateBetSubmit(e) {
     }
 }
 
+function getBetParticipants(b) {
+    const sideA = b.playerA.split(',').map(n => n.trim()).filter(n => n);
+    const sideB = b.playerB.split(',').map(n => n.trim()).filter(n => n && n.toLowerCase() !== 'group pot');
+    return { sideA, sideB };
+}
+
+function getBetMoneyDeltas(b) {
+    const deltas = {};
+    const { sideA, sideB } = getBetParticipants(b);
+    const amount = b.amount;
+    const winnerStr = (b.winner || '').trim();
+    const isSplit = b.type.endsWith('(Split)');
+
+    sideA.concat(sideB).forEach(p => {
+        if (p && p.toLowerCase() !== 'group pot') deltas[p] = 0;
+    });
+
+    if (!winnerStr || winnerStr === 'Pending' || winnerStr === 'Tie') return deltas;
+
+    if (b.type === 'Group Pot') {
+        const winners = winnerStr.split(',').map(n => n.trim()).filter(n => n);
+        if (winners.length === 0 || winners.includes('Pending')) return deltas;
+
+        const totalPot = sideA.length * amount;
+        const winShare = totalPot / winners.length;
+        sideA.forEach(p => {
+            deltas[p] = winners.includes(p) ? (winShare - amount) : -amount;
+        });
+        return deltas;
+    }
+
+    const sideAWins = (winnerStr === b.playerA.trim() || sideA.includes(winnerStr));
+    const sideBWins = (winnerStr === b.playerB.trim() || sideB.includes(winnerStr));
+    const oddsVal = b.odds ? parseFloat(b.odds) : 1.0;
+
+    if (sideAWins) {
+        const payout = amount * oddsVal;
+        if (isSplit) {
+            const winShare = payout / sideA.length;
+            const loseShare = payout / sideB.length;
+            sideA.forEach(p => deltas[p] = (deltas[p] || 0) + winShare);
+            sideB.forEach(p => deltas[p] = (deltas[p] || 0) - loseShare);
+        } else {
+            sideA.forEach(p => deltas[p] = (deltas[p] || 0) + payout * sideB.length);
+            sideB.forEach(p => deltas[p] = (deltas[p] || 0) - payout * sideA.length);
+        }
+    } else if (sideBWins) {
+        if (isSplit) {
+            const winShare = amount / sideB.length;
+            const loseShare = amount / sideA.length;
+            sideB.forEach(p => deltas[p] = (deltas[p] || 0) + winShare);
+            sideA.forEach(p => deltas[p] = (deltas[p] || 0) - loseShare);
+        } else {
+            sideB.forEach(p => deltas[p] = (deltas[p] || 0) + amount * sideA.length);
+            sideA.forEach(p => deltas[p] = (deltas[p] || 0) - amount * sideB.length);
+        }
+    }
+
+    return deltas;
+}
+
+function getSettledPaidBets() {
+    return sideBetsData.filter(b => b.paid === 'Yes' && b.winner !== 'Pending');
+}
+
+function calculatePaidBetNetEarnings() {
+    const netEarnings = {};
+    cupData.lifetime.forEach(p => {
+        netEarnings[p.PlayerName] = 0;
+    });
+
+    getSettledPaidBets().forEach(b => {
+        const deltas = getBetMoneyDeltas(b);
+        Object.entries(deltas).forEach(([player, delta]) => {
+            if (player.toLowerCase() === 'group pot') return;
+            if (netEarnings[player] === undefined) netEarnings[player] = 0;
+            netEarnings[player] += delta;
+        });
+    });
+
+    return netEarnings;
+}
+
+function formatSignedMoney(value) {
+    const rounded = Math.round(value * 100) / 100;
+    const prefix = rounded > 0 ? '+$' : rounded < 0 ? '-$' : '$';
+    const absVal = Math.abs(rounded);
+    return prefix + (Number.isInteger(absVal) ? absVal.toFixed(0) : absVal.toFixed(2));
+}
+
 // Render Historical Bets and Money Board Leaderboard
 async function renderHistoryBets(container) {
     container.innerHTML = `
@@ -3144,84 +3234,19 @@ async function renderHistoryBets(container) {
         console.error("Error loading stats:", e);
     }
     
-    const completedBets = sideBetsData.filter(b => b.paid === 'Yes');
+    const completedBets = getSettledPaidBets();
     
     // Sort Completed Bets: newest first
     completedBets.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
-    // Net Earnings calculator
-    const netEarnings = {};
-    cupData.lifetime.forEach(p => {
-        netEarnings[p.PlayerName] = 0;
-    });
-    
-    // Add up resolved bets earnings
-    const resolvedBets = sideBetsData.filter(b => b.winner !== 'Pending');
-    resolvedBets.forEach(b => {
-        const sideA = b.playerA.split(',').map(n => n.trim()).filter(n => n);
-        const sideB = b.playerB.split(',').map(n => n.trim()).filter(n => n);
-        const amount = b.amount;
-        const winnerStr = b.winner.trim();
-        
-        const isSplit = b.type.endsWith('(Split)');
-        
-        sideA.forEach(p => { if (p && p.trim().toLowerCase() !== 'group pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
-        sideB.forEach(p => { if (p && p.trim().toLowerCase() !== 'group pot' && netEarnings[p] === undefined) netEarnings[p] = 0; });
-        
-        if (winnerStr === 'Tie') return;
-        
-        if (b.type === 'Group Pot') {
-            const winners = winnerStr.split(',').map(n => n.trim()).filter(n => n);
-            if (winners.length === 0 || winners.includes('Pending')) return;
-            
-            const totalPot = sideA.length * amount;
-            const winShare = totalPot / winners.length;
-            
-            sideA.forEach(p => {
-                if (winners.includes(p)) {
-                    netEarnings[p] += (winShare - amount);
-                } else {
-                    netEarnings[p] -= amount;
-                }
-            });
-            return;
-        }
-        
-        const sideAWins = (winnerStr === b.playerA.trim() || sideA.includes(winnerStr));
-        const sideBWins = (winnerStr === b.playerB.trim() || sideB.includes(winnerStr));
-        
-        const oddsVal = b.odds ? parseFloat(b.odds) : 1.0;
-        
-        if (sideAWins) {
-            const payout = amount * oddsVal;
-            if (isSplit) {
-                const winShare = payout / sideA.length;
-                const loseShare = payout / sideB.length;
-                sideA.forEach(p => netEarnings[p] += winShare);
-                sideB.forEach(p => netEarnings[p] -= loseShare);
-            } else {
-                sideA.forEach(p => netEarnings[p] += payout * sideB.length);
-                sideB.forEach(p => netEarnings[p] -= payout * sideA.length);
-            }
-        } else if (sideBWins) {
-            if (isSplit) {
-                const winShare = amount / sideB.length;
-                const loseShare = amount / sideA.length;
-                sideB.forEach(p => netEarnings[p] += winShare);
-                sideA.forEach(p => netEarnings[p] -= loseShare);
-            } else {
-                sideB.forEach(p => netEarnings[p] += amount * sideA.length);
-                sideA.forEach(p => netEarnings[p] -= amount * sideB.length);
-            }
-        }
-    });
+    const netEarnings = calculatePaidBetNetEarnings();
     
     let leaderboard = Object.entries(netEarnings)
         .map(([name, val]) => ({ name, val }))
         .filter(item => {
             if (item.name && item.name.trim().toLowerCase() === 'group pot') return false;
             if (item.val !== 0) return true;
-            return sideBetsData.some(b => {
+            return completedBets.some(b => {
                 const sA = b.playerA.split(',').map(n => n.trim());
                 const sB = b.playerB.split(',').map(n => n.trim());
                 return sA.includes(item.name) || sB.includes(item.name);
@@ -3246,11 +3271,10 @@ async function renderHistoryBets(container) {
     } else {
         leaderboard.forEach(item => {
             let earningsClass = item.val > 0 ? 'positive' : item.val < 0 ? 'negative' : 'neutral';
-            let prefix = item.val > 0 ? '+$' : item.val < 0 ? '-$' : '$';
-            let valDisplay = prefix + Math.abs(item.val).toFixed(0);
+            let valDisplay = formatSignedMoney(item.val);
             
             statsHtml += `
-                <div class="bet-leaderboard-card">
+                <div class="bet-leaderboard-card" onclick="showPlayerBetTrail('${encodeURIComponent(item.name)}')" style="cursor: pointer;" title="View ${item.name}'s settled side bet trail">
                     <span class="bet-leaderboard-name">${item.name}</span>
                     <span class="bet-leaderboard-value ${earningsClass}">${valDisplay}</span>
                 </div>
@@ -3331,6 +3355,98 @@ async function renderHistoryBets(container) {
         </div>
     `;
     container.innerHTML = statsHtml;
+}
+
+function showPlayerBetTrail(encodedName) {
+    const playerName = decodeURIComponent(encodedName);
+    const container = document.getElementById('bets-sub-content');
+    if (!container) return;
+
+    const relatedBets = getSettledPaidBets()
+        .map(b => ({ bet: b, delta: getBetMoneyDeltas(b)[playerName] }))
+        .filter(item => item.delta !== undefined)
+        .sort((a, b) => new Date(b.bet.timestamp) - new Date(a.bet.timestamp));
+
+    const net = relatedBets.reduce((sum, item) => sum + item.delta, 0);
+    const wins = relatedBets.filter(item => item.delta > 0).length;
+    const losses = relatedBets.filter(item => item.delta < 0).length;
+    const pushes = relatedBets.filter(item => item.delta === 0).length;
+    const netClass = net > 0 ? 'positive' : net < 0 ? 'negative' : 'neutral';
+
+    let trailHtml = `
+        <div class="bet-stats-container">
+            <button class="bet-btn" onclick="renderHistoryBets(document.getElementById('bets-sub-content'))" style="margin-bottom: 1rem; background: var(--bg-sidebar); border-color: var(--border-color); color: var(--text-secondary);">
+                ← Back to Net Earnings
+            </button>
+
+            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.4rem; color: var(--text-primary); margin: 0;">💵 ${playerName}'s Side Bet Trail</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(86px, 1fr)); gap: 0.6rem;">
+                    <div style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Net</div>
+                        <div class="bet-leaderboard-value ${netClass}" style="font-size: 1.2rem;">${formatSignedMoney(net)}</div>
+                    </div>
+                    <div style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Wins</div>
+                        <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-green);">${wins}</div>
+                    </div>
+                    <div style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Losses</div>
+                        <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-red);">${losses}</div>
+                    </div>
+                    <div style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Pushes</div>
+                        <div style="font-size: 1.2rem; font-weight: 800; color: var(--text-secondary);">${pushes}</div>
+                    </div>
+                </div>
+            </div>
+    `;
+
+    if (relatedBets.length === 0) {
+        trailHtml += `
+            <p style="color: var(--text-secondary); font-style: italic; padding: 2rem; text-align: center; border: 1px dashed var(--border-color); border-radius: 16px;">
+                No settled paid side bets found for ${playerName}.
+            </p>
+        `;
+    } else {
+        trailHtml += `<div class="bets-grid">`;
+        relatedBets.forEach(({ bet, delta }) => {
+            const { sideA, sideB } = getBetParticipants(bet);
+            const isGroup = bet.type === 'Group Pot';
+            const eventLabel = isGroup ? `🎮 ${bet.event}` : (bet.type === 'Cup' ? `🏆 ${bet.event}` : `🎮 ${bet.event}`);
+            const dateStr = formatBetDate(bet.timestamp);
+            const deltaClass = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+            const resultLabel = delta > 0 ? 'Won' : delta < 0 ? 'Lost' : 'Push';
+            const playerSide = sideA.includes(playerName) ? 'Side A' : sideB.includes(playerName) ? 'Side B' : 'Participant';
+            const matchupText = isGroup ? sideA.join(', ') : `${bet.playerA} vs ${bet.playerB}`;
+
+            trailHtml += `
+                <div class="bet-card completed-bet" onclick="showBetDetails('${bet.id}')" style="cursor: pointer;">
+                    <div class="bet-header">
+                        <span>${isGroup ? 'Group Pot' : bet.type} Bet</span>
+                        <span class="bet-status-badge paid">${resultLabel} ${formatSignedMoney(delta)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; gap: 0.75rem; align-items: flex-start; margin: 0.6rem 0;">
+                        <div style="min-width: 0;">
+                            <div style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 0.25rem;">${eventLabel}</div>
+                            <div style="font-size: 0.98rem; color: var(--text-primary); font-weight: 700; line-height: 1.25;">${matchupText}</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.35rem;">${playerSide} · Winner: ${bet.winner}</div>
+                        </div>
+                        <div class="bet-leaderboard-value ${deltaClass}" style="font-size: 1.15rem; flex-shrink: 0;">${formatSignedMoney(delta)}</div>
+                    </div>
+                    <div class="bet-details-row">
+                        <span class="bet-event">${dateStr ? `📅 ${dateStr}` : 'Settled wager'}</span>
+                        <span class="bet-amount" style="color: var(--text-secondary);">$${bet.amount.toFixed(0)}</span>
+                    </div>
+                    ${bet.quote ? `<div class="bet-quote-bubble">"${bet.quote}"</div>` : ''}
+                </div>
+            `;
+        });
+        trailHtml += `</div>`;
+    }
+
+    trailHtml += `</div>`;
+    container.innerHTML = trailHtml;
 }
 
 // Prompt winner dialog for manual wagers
