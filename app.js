@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.5';
+const APP_VERSION = '2026.7.14.6';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -382,6 +382,17 @@ function isCompletedTournamentMoneyEntry(entry) {
     // Entry fees alone can exist on seeded/future event sheets. Only count rows
     // once the player has a real result or payout recorded.
     return place !== Infinity && (points > 0 || winnings > 0 || bounty > 0);
+}
+
+function isCompletedTournamentResultEntry(entry) {
+    if (!entry || entry.Year !== 2026) return false;
+
+    const place = parsePlace(entry.Place);
+    const points = Number(entry['PC Points']) || 0;
+    const score = String(entry.Score || '').trim().toLowerCase();
+    const hasScore = score !== '' && score !== 'n/a' && score !== 'none' && score !== 'pending' && score !== '-';
+
+    return place !== Infinity && points > 0 && hasScore;
 }
 
 function formatMoneyAmount(amount, decimals = 2) {
@@ -1155,13 +1166,25 @@ function renderOddsTable() {
 }
 
 // ----------------- RENDER BUBBLE WATCH WIDGET -----------------
-function renderBubbleTable() {
+async function renderBubbleTable() {
     if (!cupData) return;
     
     const table = document.getElementById('main-data-table');
+
+    table.innerHTML = `
+        <tbody>
+            <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                    <span class="loading-spinner">⏳</span> Loading completed 2026 event results...
+                </td>
+            </tr>
+        </tbody>
+    `;
+
+    await ensureAll2026EventMoneyDataLoaded();
     
-    // Check if there are any 2026 granular event entries with scores
-    const entries2026 = cupData.granular.filter(g => g.Year === 2026 && g['PC Points'] > 0);
+    // Check if there are any completed 2026 event entries with real scores.
+    const entries2026 = cupData.granular.filter(isCompletedTournamentResultEntry);
     
     if (entries2026.length === 0) {
         let html = `
