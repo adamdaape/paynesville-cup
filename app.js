@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.8';
+const APP_VERSION = '2026.7.14.9';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -395,12 +395,13 @@ function isCompletedTournamentMoneyEntry(entry) {
 
     const place = parsePlace(entry.Place);
     const points = Number(entry['PC Points']) || 0;
+    const entryFee = getTournamentEntryFee(entry);
     const winnings = getTournamentWinnings(entry);
     const bounty = getTournamentBounty(entry);
 
-    // Entry fees alone can exist on seeded/future event sheets. Only count rows
-    // once the player has a real result or payout recorded.
-    return place !== Infinity && (points > 0 || winnings > 0 || bounty > 0);
+    // Count completed results even when the player scored 0 Cup points; they
+    // still paid an entry fee and should appear in tournament money totals.
+    return place !== Infinity && (entryFee > 0 || points > 0 || winnings > 0 || bounty > 0);
 }
 
 function isCompletedTournamentResultEntry(entry) {
