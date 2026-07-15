@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.9';
+const APP_VERSION = '2026.7.14.10';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -1950,6 +1950,7 @@ function showTournamentHistory(playerName, tournamentName) {
     if (!modal || !inner) return;
 
     const prettyTournament = tournamentName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    const scoreLabel = tournamentName.toUpperCase() === 'BOCCE' ? 'Games Won' : 'Score / Result';
 
     const renderHistory = () => {
         const entries = cupData.granular
@@ -1978,7 +1979,7 @@ function showTournamentHistory(playerName, tournamentName) {
                         <div class="tournament-history-main">
                             <div>
                                 <div class="medal-year-title">📅 ${entry.Year}</div>
-                                <div class="tournament-history-meta">Score / Result: <strong>${score}</strong></div>
+                                <div class="tournament-history-meta">${scoreLabel}: <strong>${score}</strong></div>
                             </div>
                             <span class="rank-badge ${badgeClass}" style="position: relative; width: 44px; height: 36px; font-size: 1rem;">${entry.Place}</span>
                         </div>
