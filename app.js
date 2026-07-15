@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.6';
+const APP_VERSION = '2026.7.14.7';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -146,6 +146,10 @@ const BLACKLIST_NAMES = new Set([
     'KEY', 'Active Score', 'Inactive Score', 'No Participation', 'Booby Prize', 'nan', '', 'None', 'undefined', 'null'
 ]);
 
+const TOURNAMENT_SHEET_NAMES = {
+    "TEXAS HOLD EM": "Texas Hold 'Em"
+};
+
 function cleanPlayerName(name) {
     if (!name || typeof name !== 'string') return "";
     const cleaned = name.replace(/\s+/g, ' ').trim();
@@ -159,6 +163,15 @@ function isValidPlayer(name) {
     if (!name || BLACKLIST_NAMES.has(name)) return false;
     if (name.toLowerCase().startsWith('note')) return false;
     return true;
+}
+
+function getTournamentSheetName(tournamentName) {
+    return TOURNAMENT_SHEET_NAMES[tournamentName] || tournamentName;
+}
+
+function isAggregateStandingsSheet(headers) {
+    const headerSet = new Set(headers);
+    return headerSet.has('Tournaments Entered') || headerSet.has('Total Score') || headerSet.has('Average Score');
 }
 
 // Fetch and merge 2026 google sheets standings into the app state
@@ -272,7 +285,7 @@ async function ensure2026EventDataLoaded(tournamentName) {
         return;
     }
     
-    const csvRows = await fetchGoogleSheetCSV(tournamentName);
+    const csvRows = await fetchGoogleSheetCSV(getTournamentSheetName(tournamentName));
     if (!csvRows || csvRows.length <= 1) {
         googleSheetsCache[cacheKey] = [];
         return;
@@ -280,6 +293,12 @@ async function ensure2026EventDataLoaded(tournamentName) {
     
     const headers = csvRows[0].map(h => h.trim());
     const dataRows = csvRows.slice(1);
+
+    if (isAggregateStandingsSheet(headers)) {
+        console.warn(`Skipping ${tournamentName}: Google Sheets returned an aggregate standings sheet instead of tournament results.`);
+        googleSheetsCache[cacheKey] = [];
+        return;
+    }
     
     const nameIdx = headers.indexOf('Name');
     const placeIdx = headers.indexOf('Place');
