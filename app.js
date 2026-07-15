@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.7';
+const APP_VERSION = '2026.7.14.8';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -1911,6 +1911,7 @@ function getGradesContentHtml(name) {
         const prettyName = tName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
         
         tournamentGrades.push({
+            tournamentName: tName,
             prettyName,
             subText,
             grade,
@@ -1923,14 +1924,16 @@ function getGradesContentHtml(name) {
     tournamentGrades.sort((a, b) => b.sortScore - a.sortScore);
     
     tournamentGrades.forEach(item => {
+        const escapedName = name.replace(/'/g, "\\'");
+        const escapedTournament = item.tournamentName.replace(/'/g, "\\'");
         html += `
-            <div class="grade-row">
+            <button type="button" class="grade-row grade-row-clickable" onclick="showTournamentHistory('${escapedName}', '${escapedTournament}')" title="View ${item.prettyName} history">
                 <div>
                     <span class="grade-row-title">${item.prettyName}</span>
                     <span class="grade-row-sub">${item.subText}</span>
                 </div>
                 <span class="grade-badge ${item.gradeClass}">${item.grade}</span>
-            </div>
+            </button>
         `;
     });
     
@@ -1938,15 +1941,76 @@ function getGradesContentHtml(name) {
     return html;
 }
 
+function showTournamentHistory(playerName, tournamentName) {
+    if (!cupData) return;
+
+    const modal = document.getElementById('medal-details-modal');
+    const inner = document.getElementById('medal-details-inner');
+    if (!modal || !inner) return;
+
+    const prettyTournament = tournamentName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+
+    const renderHistory = () => {
+        const entries = cupData.granular
+            .filter(g => g['Player Name'] === playerName && g.Tournament.toUpperCase() === tournamentName.toUpperCase())
+            .sort((a, b) => b.Year - a.Year);
+
+        let html = `
+            <div class="medal-details-header">
+                <div class="medal-details-title">${playerName}</div>
+                <div class="medal-details-subtitle">${prettyTournament} History</div>
+            </div>
+            <div style="overflow-y: auto; max-height: 400px; padding-right: 0.5rem;">
+        `;
+
+        if (entries.length === 0) {
+            html += `<p style="text-align: center; color: var(--text-secondary);">No recorded entries for this tournament yet.</p>`;
+        } else {
+            entries.forEach(entry => {
+                const placeNum = parsePlace(entry.Place);
+                const badgeClass = placeNum === 1 ? 'rank-1' : placeNum === 2 ? 'rank-2' : placeNum === 3 ? 'rank-3' : 'rank-other';
+                const score = entry.Score && entry.Score !== 'N/A' ? entry.Score : 'N/A';
+                const pcPoints = Number(entry['PC Points'] || 0);
+
+                html += `
+                    <div class="medal-year-block tournament-history-row">
+                        <div class="tournament-history-main">
+                            <div>
+                                <div class="medal-year-title">📅 ${entry.Year}</div>
+                                <div class="tournament-history-meta">Score / Result: <strong>${score}</strong></div>
+                            </div>
+                            <span class="rank-badge ${badgeClass}" style="position: relative; width: 44px; height: 36px; font-size: 1rem;">${entry.Place}</span>
+                        </div>
+                        <div class="tournament-history-points">${pcPoints.toFixed(1)} Cup Points</div>
+                    </div>
+                `;
+            });
+        }
+
+        html += `</div>`;
+        inner.innerHTML = html;
+    };
+
+    renderHistory();
+    modal.classList.add('active');
+
+    ensure2026EventDataLoaded(tournamentName)
+        .then(renderHistory)
+        .catch(e => console.warn(`Could not refresh ${tournamentName} history:`, e));
+}
+
 // Generate HTML string for Best Finishes Tab
 function getBestFinishesContentHtml(name) {
     const playerYears = cupData.yearly.filter(y => y.Name === name);
     if (playerYears.length === 0) return `<p style="text-align: center; color: var(--text-secondary); margin-top: 2rem;">No yearly data available.</p>`;
+
+    const historicYears = playerYears.filter(y => y.Year < 2026);
+    const yearsForBestFinishes = historicYears.length > 0 ? historicYears : playerYears;
     
-    playerYears.sort((a,b) => parsePlace(a.Place) - parsePlace(b.Place));
+    yearsForBestFinishes.sort((a,b) => parsePlace(a.Place) - parsePlace(b.Place));
     
-    const bestYearRecord = playerYears[0];
-    const top3Records = playerYears.filter(y => parsePlace(y.Place) <= 3 && y.Year !== bestYearRecord.Year);
+    const bestYearRecord = yearsForBestFinishes[0];
+    const top3Records = yearsForBestFinishes.filter(y => parsePlace(y.Place) <= 3 && y.Year !== bestYearRecord.Year);
     
     top3Records.sort((a,b) => b.Year - a.Year);
     
@@ -1958,7 +2022,7 @@ function getBestFinishesContentHtml(name) {
     let html = `
         <div class="grades-container">
             <p style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; font-style: italic;">
-                This is your best OVERALL Paynesville Cup placement
+                This is your best completed Paynesville Cup placement
             </p>
     `;
     
@@ -2046,7 +2110,7 @@ function showPlayerCard(name) {
         container.classList.remove('gold-border');
     }
     
-    const moneyNet = p.TourneyMoneyNet;
+    const moneyNet = p.TourneyMoneyNet || 0;
     const hasMoney  = (p.TourneyEntryFeesPaid || 0) > 0 || moneyNet !== 0;
     const moneyVal  = hasMoney ? formatMoneyAmount(moneyNet) : '—';
     const moneyColor = !hasMoney ? 'var(--text-secondary)' : moneyNet >= 0 ? 'hsl(145, 70%, 55%)' : 'var(--accent-red)';

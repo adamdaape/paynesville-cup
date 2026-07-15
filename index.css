@@ -1420,8 +1420,21 @@ body {
     transition: background-color var(--transition-speed);
 }
 
+.grade-row-clickable {
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
 .grade-row:hover {
     background-color: hsla(222, 20%, 25%, 0.2);
+}
+
+.grade-row-clickable:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
 }
 
 .grade-row-title {
@@ -1514,6 +1527,33 @@ body {
     border-radius: 12px;
     padding: 1rem;
     margin-bottom: 1rem;
+}
+
+.tournament-history-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.tournament-history-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.tournament-history-meta {
+    margin-top: 0.35rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.tournament-history-points {
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.7rem;
+    color: var(--accent-cyan);
+    font-weight: 700;
+    font-size: 0.9rem;
 }
 
 .medal-year-title {
