@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.14.10';
+const APP_VERSION = '2026.7.16.2';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -2445,6 +2445,22 @@ function formatBetDate(isoString) {
     }
 }
 
+function isOverallFinishBet(bet) {
+    return bet && bet.type === 'Cup' && String(bet.event || '').trim().toLowerCase() === 'overall finish';
+}
+
+// Overall Finish is a season-end wager. It must never be written by the app:
+// standings rows are provisional until the entire Cup is complete.
+function canSubmitBetAction(payload) {
+    const bet = sideBetsData.find(b => b.id === payload?.id);
+    if (bet && isOverallFinishBet(bet) && (payload.action === 'resolve' || payload.action === 'markPaid')) {
+        alert("Overall Cup Finish bets are locked until the full Cup is complete. Update the sheet manually only after final standings are official.");
+        renderSideBetsBoard();
+        return false;
+    }
+    return true;
+}
+
 // Render Active Bets Board
 async function renderActiveBets(container) {
     container.innerHTML = `
@@ -2480,6 +2496,7 @@ async function renderActiveBets(container) {
     let html = `<div class="bets-grid">`;
     activeBets.forEach(b => {
         const isGroup = b.type === 'Group Pot';
+        const isLockedOverallFinish = isOverallFinishBet(b);
         const participants = isGroup ? b.playerA.split(',').map(n => n.trim()).filter(n => n) : [];
         
         let statusClass = b.winner === 'Pending' ? 'active-bet' : 'resolved-unpaid';
@@ -2506,11 +2523,19 @@ async function renderActiveBets(container) {
             }
         } else {
             if (b.winner === 'Pending') {
-                actionHtml = `
-                    <div class="bet-actions">
-                        <button class="bet-btn resolve" onclick="event.stopPropagation(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
-                    </div>
-                `;
+                if (isLockedOverallFinish) {
+                    actionHtml = `
+                        <div class="bet-actions">
+                            <button class="bet-btn" disabled style="opacity: 0.55; cursor: not-allowed;">🔒 Locked Until Cup Ends</button>
+                        </div>
+                    `;
+                } else {
+                    actionHtml = `
+                        <div class="bet-actions">
+                            <button class="bet-btn resolve" onclick="event.stopPropagation(); triggerResolveBet('${b.id}', '${b.playerA.replace(/'/g, "\\'")}', '${b.playerB.replace(/'/g, "\\'")}')">🎯 Resolve Winner</button>
+                        </div>
+                    `;
+                }
             } else {
                 actionHtml = `
                     <div class="bet-actions">
@@ -3675,6 +3700,8 @@ function triggerMarkPaid(betId) {
 // Background post updater for Google Sheets Web App
 async function executeBetAction(payload) {
     const container = document.getElementById('bets-sub-content');
+    if (!canSubmitBetAction(payload)) return;
+
     container.innerHTML = `
         <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
             <span class="loading-spinner">⏳</span> Submitting changes to Google Sheets...
@@ -3711,6 +3738,7 @@ function showBetDetails(id) {
     if (!b) return;
     
     const isGroup = b.type === 'Group Pot';
+    const isLockedOverallFinish = isOverallFinishBet(b);
     const sideA = b.playerA.split(',').map(n => n.trim()).filter(n => n);
     const sideB = b.playerB.split(',').map(n => n.trim()).filter(n => n);
     
@@ -3743,6 +3771,10 @@ function showBetDetails(id) {
             if (isGroup) {
                 actionHtml = `
                     <button class="bet-btn resolve" style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem;" onclick="closeBetDetails(); showSettleGroupModal('${b.id}')">🎯 Settle Winner(s)</button>
+                `;
+            } else if (isLockedOverallFinish) {
+                actionHtml = `
+                    <button class="bet-btn" disabled style="padding: 0.8rem; font-size: 1rem; width: 100%; border-radius: 12px; margin-top: 1rem; opacity: 0.55; cursor: not-allowed;">🔒 Locked Until Cup Ends</button>
                 `;
             } else {
                 actionHtml = `
@@ -3981,6 +4013,8 @@ async function confirmSettleGroup(id) {
 async function saveGroupPlayerPayments(betId) {
     const b = sideBetsData.find(x => x.id === betId);
     if (!b) return;
+
+    if (!canSubmitBetAction({ action: 'resolve', id: betId })) return;
     
     const checkboxes = Array.from(document.querySelectorAll('.group-payment-check'));
     const paidPlayers = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
