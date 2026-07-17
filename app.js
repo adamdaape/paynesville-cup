@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.16.2';
+const APP_VERSION = '2026.7.16.3';
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -405,14 +405,27 @@ function isCompletedTournamentMoneyEntry(entry) {
 }
 
 function isCompletedTournamentResultEntry(entry) {
-    if (!entry || entry.Year !== 2026) return false;
+    // A valid player row in a loaded event sheet represents a registration.
+    // Do not require positive points or a score: a player can have a completed
+    // entry with 0 points, or be registered before the result is entered.
+    return Boolean(
+        entry &&
+        entry.Year === 2026 &&
+        isValidPlayer(entry['Player Name'])
+    );
+}
 
-    const place = parsePlace(entry.Place);
-    const points = Number(entry['PC Points']) || 0;
-    const score = String(entry.Score || '').trim().toLowerCase();
-    const hasScore = score !== '' && score !== 'n/a' && score !== 'none' && score !== 'pending' && score !== '-';
+function getUnique2026TournamentEntries(entries) {
+    const uniqueEntries = new Map();
 
-    return place !== Infinity && points > 0 && hasScore;
+    entries.filter(isCompletedTournamentResultEntry).forEach(entry => {
+        const key = `${entry['Player Name']}\u0000${entry.Tournament}`;
+        if (!uniqueEntries.has(key)) {
+            uniqueEntries.set(key, entry);
+        }
+    });
+
+    return [...uniqueEntries.values()];
 }
 
 function formatMoneyAmount(amount, decimals = 2) {
@@ -1203,8 +1216,9 @@ async function renderBubbleTable() {
 
     await ensureAll2026EventMoneyDataLoaded();
     
-    // Check if there are any completed 2026 event entries with real scores.
-    const entries2026 = cupData.granular.filter(isCompletedTournamentResultEntry);
+    // Count registrations from valid event rows. Use one entry per player per
+    // tournament so duplicate rows cannot inflate a player's event count.
+    const entries2026 = getUnique2026TournamentEntries(cupData.granular);
     
     if (entries2026.length === 0) {
         let html = `
