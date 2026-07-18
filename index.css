@@ -15,6 +15,7 @@
     --accent-cyan: hsl(180, 100%, 48%);
     --accent-magenta: hsl(325, 95%, 55%);
     --accent-green: hsl(145, 80%, 45%);
+    --accent-lime: hsl(82, 100%, 55%);
     --accent-red: hsl(0, 85%, 50%);
     
     /* System variables */
@@ -1501,6 +1502,164 @@ body {
     opacity: 0.5;
 }
 
+/* Current-year player card view */
+.current-year-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-height: 250px;
+}
+
+.current-year-summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.2rem 0.2rem 0.45rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    letter-spacing: 0.35px;
+    text-transform: uppercase;
+}
+
+.current-year-summary strong {
+    color: var(--accent-cyan);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.current-year-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 0.1rem 0.35rem 0.15rem 0.05rem;
+}
+
+.current-year-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    background: hsla(222, 20%, 25%, 0.1);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    position: relative;
+    transition: background-color var(--transition-speed), border-color var(--transition-speed), transform var(--transition-speed);
+}
+
+.current-year-medal-1 { border-left: 3px solid var(--accent-gold); }
+.current-year-medal-2 { border-left: 3px solid hsl(210, 15%, 80%); }
+.current-year-medal-3 { border-left: 3px solid hsl(30, 60%, 50%); }
+
+.current-year-top-four {
+    box-shadow: inset 0 0 0 1px var(--accent-lime);
+}
+
+.top-four-score-tag,
+.history-top-four-label {
+    color: var(--accent-lime);
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.65px;
+    text-transform: uppercase;
+}
+
+.top-four-score-tag {
+    grid-column: 1 / -1;
+    justify-self: end;
+    margin-top: -0.3rem;
+}
+
+.current-year-row:hover {
+    background: hsla(180, 100%, 48%, 0.08);
+    border-color: hsla(180, 100%, 48%, 0.35);
+    transform: translateY(-1px);
+}
+
+.current-year-row:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+.current-year-row-title {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.current-year-row-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.current-year-row-stat small {
+    font-size: 0.65rem;
+    letter-spacing: 0.35px;
+    text-transform: uppercase;
+}
+
+.current-year-row .rank-badge {
+    position: static;
+    width: auto;
+    min-width: 34px;
+    height: 28px;
+    padding: 0 0.35rem;
+    font-size: 0.75rem;
+}
+
+.current-year-points {
+    min-width: 34px;
+    color: var(--accent-cyan);
+    font-size: 0.85rem;
+    text-align: right;
+}
+
+.current-year-loading,
+.current-year-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 220px;
+    padding: 1.5rem;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.current-year-empty-icon {
+    margin-bottom: 0.65rem;
+    font-size: 2rem;
+}
+
+.current-year-empty-title {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.current-year-empty-sub {
+    max-width: 260px;
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
 /* Medal Details specific styles */
 .medal-details-header {
     text-align: center;
@@ -1533,6 +1692,61 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+}
+
+.medal-history-1 { border-left: 3px solid var(--accent-gold); }
+.medal-history-2 { border-left: 3px solid hsl(210, 15%, 80%); }
+.medal-history-3 { border-left: 3px solid hsl(30, 60%, 50%); }
+
+.history-top-four {
+    box-shadow: inset 0 0 0 1px var(--accent-lime);
+}
+
+.history-top-four-label {
+    border-top: 1px solid var(--accent-lime);
+    padding-top: 0.55rem;
+}
+
+.history-teammates-btn {
+    align-self: flex-start;
+    border: 1px solid hsla(180, 100%, 48%, 0.35);
+    border-radius: 7px;
+    padding: 0.35rem 0.55rem;
+    color: var(--accent-cyan);
+    background: hsla(180, 100%, 48%, 0.08);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.history-teammates-btn:hover,
+.history-teammates-btn:focus-visible {
+    border-color: var(--accent-cyan);
+    background: hsla(180, 100%, 48%, 0.16);
+    outline: none;
+}
+
+.team-details-card {
+    padding: 1rem;
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.team-details-label {
+    color: var(--accent-cyan);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+
+.team-details-title {
+    margin-top: 0.4rem;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 700;
 }
 
 .tournament-history-main {

@@ -1,5 +1,6 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.16.3';
+const APP_VERSION = '2026.7.18.2';
+const CURRENT_SEASON_YEAR = 2026;
 
 // Google Sheets Live Data Configuration
 const GOOGLE_SPREADSHEET_ID = '10isAN7DcOODriMVYVY1s0hQaVmsZbR-nK5TZWbavYJ0';
@@ -316,6 +317,10 @@ async function ensure2026EventDataLoaded(tournamentName) {
     }
     
     const entries2026 = [];
+    const eventDateIdx = ['Date', 'Event Date', 'Tournament Date', 'EVENT DATE'].map(label => headers.indexOf(label)).find(idx => idx !== -1) ?? -1;
+    const teamIdx = ['Team', 'Team Name', 'Team ID'].map(label => headers.indexOf(label)).find(idx => idx !== -1) ?? -1;
+    const teammatesIdx = ['Teammates', 'Teammate', 'Partner', 'Partners', 'Team Members'].map(label => headers.indexOf(label)).find(idx => idx !== -1) ?? -1;
+    const teammateColumnIdxs = ['Player 2', 'Player 3', 'Player 4'].map(label => headers.indexOf(label)).filter(idx => idx !== -1);
     dataRows.forEach(row => {
         const rawName = row[nameIdx];
         const name = cleanPlayerName(rawName);
@@ -356,7 +361,12 @@ async function ensure2026EventDataLoaded(tournamentName) {
             'EntryFee': entryFee,
             'Winnings': winnings,
             'Bounty': bounty,
-            'NetMoney': netMoney
+            'NetMoney': netMoney,
+            'EventDate': eventDateIdx !== -1 ? row[eventDateIdx] : '',
+            'EventOrder': MAIN_TOURNAMENTS.indexOf(tournamentName),
+            'Team': teamIdx !== -1 ? row[teamIdx] : '',
+            'Teammates': teammatesIdx !== -1 ? row[teammatesIdx] : '',
+            'TeammateColumns': teammateColumnIdxs.map(idx => row[idx]).filter(Boolean)
         });
     });
     
@@ -1967,6 +1977,7 @@ function showTournamentHistory(playerName, tournamentName) {
     const scoreLabel = tournamentName.toUpperCase() === 'BOCCE' ? 'Games Won' : 'Score / Result';
 
     const renderHistory = () => {
+        const topFourKeys = getCurrentYearTopFourKeys(playerName);
         const entries = cupData.granular
             .filter(g => g['Player Name'] === playerName && g.Tournament.toUpperCase() === tournamentName.toUpperCase())
             .sort((a, b) => b.Year - a.Year);
@@ -1984,12 +1995,15 @@ function showTournamentHistory(playerName, tournamentName) {
         } else {
             entries.forEach(entry => {
                 const placeNum = parsePlace(entry.Place);
-                const badgeClass = placeNum === 1 ? 'rank-1' : placeNum === 2 ? 'rank-2' : placeNum === 3 ? 'rank-3' : 'rank-other';
+                const badgeClass = getPlaceBadgeClass(entry.Place);
                 const score = entry.Score && entry.Score !== 'N/A' ? entry.Score : 'N/A';
                 const pcPoints = Number(entry['PC Points'] || 0);
+                const medalClass = placeNum <= 3 ? ` medal-history-${placeNum}` : '';
+                const topFourClass = topFourKeys.has(getEntryKey(entry)) ? ' history-top-four' : '';
+                const teammates = getEntryTeammates(entry);
 
                 html += `
-                    <div class="medal-year-block tournament-history-row">
+                    <div class="medal-year-block tournament-history-row${medalClass}${topFourClass}">
                         <div class="tournament-history-main">
                             <div>
                                 <div class="medal-year-title">📅 ${entry.Year}</div>
@@ -1998,6 +2012,8 @@ function showTournamentHistory(playerName, tournamentName) {
                             <span class="rank-badge ${badgeClass}" style="position: relative; width: 44px; height: 36px; font-size: 1rem;">${entry.Place}</span>
                         </div>
                         <div class="tournament-history-points">${pcPoints.toFixed(1)} Cup Points</div>
+                        ${topFourKeys.has(getEntryKey(entry)) ? '<div class="history-top-four-label">TOP 4 SCORE</div>' : ''}
+                        ${teammates.length > 0 ? `<button type="button" class="history-teammates-btn" onclick="showTournamentTeammates('${playerName.replace(/'/g, "\\'")}', '${entry.Tournament.replace(/'/g, "\\'")}', ${entry.Year})">👥 View teammates</button>` : ''}
                     </div>
                 `;
             });
@@ -2010,9 +2026,49 @@ function showTournamentHistory(playerName, tournamentName) {
     renderHistory();
     modal.classList.add('active');
 
-    ensure2026EventDataLoaded(tournamentName)
+    const refreshHistory = ensure2026EventDataLoaded(tournamentName).then(() => {
+        const hasCurrentSeasonEntry = cupData.granular.some(entry =>
+            entry['Player Name'] === playerName &&
+            entry.Year === CURRENT_SEASON_YEAR
+        );
+        return hasCurrentSeasonEntry
+            ? Promise.all(MAIN_TOURNAMENTS.map(eventName => ensure2026EventDataLoaded(eventName)))
+            : null;
+    });
+
+    refreshHistory
         .then(renderHistory)
         .catch(e => console.warn(`Could not refresh ${tournamentName} history:`, e));
+}
+
+function showTournamentTeammates(playerName, tournamentName, year) {
+    const modal = document.getElementById('medal-details-modal');
+    const inner = document.getElementById('medal-details-inner');
+    if (!modal || !inner || !cupData) return;
+
+    const entry = cupData.granular.find(candidate =>
+        candidate['Player Name'] === playerName &&
+        candidate.Tournament.toUpperCase() === tournamentName.toUpperCase() &&
+        candidate.Year === year
+    );
+    if (!entry) return;
+
+    const teammates = getEntryTeammates(entry);
+    const prettyTournament = formatTournamentName(tournamentName);
+    inner.innerHTML = `
+        <div class="medal-details-header">
+            <div class="medal-details-title">${playerName}</div>
+            <div class="medal-details-subtitle">${prettyTournament} · ${year}</div>
+        </div>
+        <div class="team-details-card">
+            <div class="team-details-label">👥 Team event</div>
+            <div class="team-details-title">Teammates</div>
+            <div class="teammate-list">
+                ${teammates.map(teammate => `<div class="teammate-item"><span class="teammate-icon">👤</span><span>${teammate}</span></div>`).join('')}
+            </div>
+        </div>
+    `;
+    modal.classList.add('active');
 }
 
 // Generate HTML string for Best Finishes Tab
@@ -2077,11 +2133,134 @@ function getBestFinishesContentHtml(name) {
     return html;
 }
 
+function formatTournamentName(tournamentName) {
+    return tournamentName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+}
+
+function getEntryKey(entry) {
+    return `${entry.Year}\u0000${entry.Tournament}\u0000${entry['Player Name']}`;
+}
+
+function getCurrentYearTopFourKeys(name) {
+    const currentEntries = cupData.granular
+        .filter(entry => entry['Player Name'] === name && entry.Year === CURRENT_SEASON_YEAR)
+        .sort((a, b) => Number(b['PC Points'] || 0) - Number(a['PC Points'] || 0));
+
+    return new Set(currentEntries.slice(0, 4).map(getEntryKey));
+}
+
+function getPlaceBadgeClass(place) {
+    const placeNum = parsePlace(place);
+    return placeNum === 1 ? 'rank-1' : placeNum === 2 ? 'rank-2' : placeNum === 3 ? 'rank-3' : 'rank-other';
+}
+
+function getEntryTeammates(entry) {
+    const teamEntries = entry.Team
+        ? cupData.granular.filter(candidate =>
+            candidate !== entry &&
+            candidate.Year === entry.Year &&
+            candidate.Tournament === entry.Tournament &&
+            candidate.Team === entry.Team
+        )
+        : [];
+    const rawValues = [entry.Teammates, ...(entry.TeammateColumns || []), ...teamEntries.map(candidate => candidate['Player Name'])].filter(Boolean);
+    const teammates = rawValues
+        .flatMap(value => String(value).split(/[,;/|]+/))
+        .map(value => cleanPlayerName(value))
+        .filter(value => value && value !== entry['Player Name'] && isValidPlayer(value));
+
+    return [...new Set(teammates)];
+}
+
+function getTopFourLabelHtml(entry, topFourKeys) {
+    return topFourKeys.has(getEntryKey(entry))
+        ? `<span class="top-four-score-tag">TOP 4 SCORE</span>`
+        : '';
+}
+
+// Current-season view: only event sheets with a real player row are included.
+// This intentionally does not use the yearly standings' tournament count because
+// that aggregate can include players who have not appeared in a loaded event row.
+function getCurrentYearContentHtml(name, entries = null, isLoading = false) {
+    if (isLoading) {
+        return `<div class="current-year-loading"><span class="loading-spinner">⏳</span> Loading ${CURRENT_SEASON_YEAR} tournament entries...</div>`;
+    }
+
+    const playerEntries = (entries || [])
+        .filter(entry => entry['Player Name'] === name && entry.Year === CURRENT_SEASON_YEAR)
+        .sort((a, b) => {
+            const dateA = a.EventDate ? new Date(a.EventDate).getTime() : 0;
+            const dateB = b.EventDate ? new Date(b.EventDate).getTime() : 0;
+            if (dateA !== dateB) return dateB - dateA;
+            return (b.EventOrder ?? -1) - (a.EventOrder ?? -1);
+        });
+
+    if (playerEntries.length === 0) {
+        return `
+            <div class="current-year-empty">
+                <div class="current-year-empty-icon">📅</div>
+                <div class="current-year-empty-title">No ${CURRENT_SEASON_YEAR} entries yet</div>
+                <div class="current-year-empty-sub">Entered tournaments will appear here as the season unfolds.</div>
+            </div>
+        `;
+    }
+
+    const escapedName = name.replace(/'/g, "\\'");
+    const topFourKeys = getCurrentYearTopFourKeys(name);
+    return `
+        <div class="current-year-panel">
+            <div class="current-year-summary">
+                <span>${CURRENT_SEASON_YEAR} season sweep</span>
+                <strong>${playerEntries.length} ${playerEntries.length === 1 ? 'tourney' : 'tourneys'} entered</strong>
+            </div>
+            <div class="current-year-list" role="list" aria-label="${CURRENT_SEASON_YEAR} tournament entries">
+                ${playerEntries.map(entry => {
+                    const tournament = formatTournamentName(entry.Tournament);
+                    const points = Number(entry['PC Points'] || 0);
+                    const place = entry.Place || 'N/A';
+                    const placeNum = parsePlace(place);
+                    const badgeClass = getPlaceBadgeClass(place);
+                    const rowClass = placeNum <= 3 ? ` current-year-medal-${placeNum}` : '';
+                    const topFourClass = topFourKeys.has(getEntryKey(entry)) ? ' current-year-top-four' : '';
+                    return `
+                        <button type="button" class="current-year-row${rowClass}${topFourClass}" role="listitem" onclick="showTournamentHistory('${escapedName}', '${entry.Tournament.replace(/'/g, "\\'")}')" title="View ${tournament} history">
+                            <span class="current-year-row-title">${tournament}</span>
+                            <span class="current-year-row-stat"><small>Place</small><b class="rank-badge ${badgeClass}">${place}</b></span>
+                            <span class="current-year-row-stat"><small>PC Pts</small><b class="current-year-points">${points.toFixed(1)}</b></span>
+                            ${getTopFourLabelHtml(entry, topFourKeys)}
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
+async function loadCurrentYearCardTab(name) {
+    const contentArea = document.getElementById('card-tab-content');
+    if (!contentArea) return;
+
+    contentArea.innerHTML = getCurrentYearContentHtml(name, null, true);
+    await Promise.all(MAIN_TOURNAMENTS.map(async (tournamentName) => {
+        try {
+            await ensure2026EventDataLoaded(tournamentName);
+        } catch (e) {
+            console.warn(`Could not load ${CURRENT_SEASON_YEAR} ${tournamentName}:`, e);
+        }
+    }));
+
+    // The player may have switched tabs while the event sheets were loading.
+    if (document.getElementById('card-btn-current-year')?.classList.contains('active')) {
+        contentArea.innerHTML = getCurrentYearContentHtml(name, cupData.granular);
+    }
+}
+
 // Toggle between player card inner tabs
 function switchCardTab(tabName, name) {
     const btnScouting = document.getElementById('card-btn-scouting');
     const btnGrades = document.getElementById('card-btn-grades');
     const btnFinishes = document.getElementById('card-btn-finishes');
+    const btnCurrentYear = document.getElementById('card-btn-current-year');
     const contentArea = document.getElementById('card-tab-content');
     
     if (!btnScouting || !btnGrades || !contentArea) return;
@@ -2089,6 +2268,7 @@ function switchCardTab(tabName, name) {
     btnScouting.classList.remove('active');
     btnGrades.classList.remove('active');
     if (btnFinishes) btnFinishes.classList.remove('active');
+    if (btnCurrentYear) btnCurrentYear.classList.remove('active');
     
     if (tabName === 'scouting') {
         btnScouting.classList.add('active');
@@ -2102,6 +2282,9 @@ function switchCardTab(tabName, name) {
     } else if (tabName === 'finishes') {
         if (btnFinishes) btnFinishes.classList.add('active');
         contentArea.innerHTML = getBestFinishesContentHtml(name);
+    } else if (tabName === 'current-year') {
+        if (btnCurrentYear) btnCurrentYear.classList.add('active');
+        loadCurrentYearCardTab(name);
     }
 }
 
@@ -2166,6 +2349,7 @@ function showPlayerCard(name) {
             <button class="card-tab-btn active" id="card-btn-scouting" onclick="switchCardTab('scouting', '${name.replace(/'/g, "\\'")}')">📜 Scouting Report</button>
             <button class="card-tab-btn" id="card-btn-grades" onclick="switchCardTab('grades', '${name.replace(/'/g, "\\'")}')">📊 Tournament Grades</button>
             <button class="card-tab-btn" id="card-btn-finishes" onclick="switchCardTab('finishes', '${name.replace(/'/g, "\\'")}')">🏆 Best Finishes</button>
+            <button class="card-tab-btn" id="card-btn-current-year" onclick="switchCardTab('current-year', '${name.replace(/'/g, "\\'")}')">📅 Current Year</button>
         </div>
         
         <div id="card-tab-content" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; min-height: 310px;">
