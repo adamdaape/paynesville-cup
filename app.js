@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.18.2';
+const APP_VERSION = '2026.7.18.3';
 const CURRENT_SEASON_YEAR = 2026;
 
 // Google Sheets Live Data Configuration
@@ -1987,6 +1987,7 @@ function showTournamentHistory(playerName, tournamentName) {
                 <div class="medal-details-title">${playerName}</div>
                 <div class="medal-details-subtitle">${prettyTournament} History</div>
             </div>
+            ${getTournamentHistorySummary(playerName, tournamentName, entries)}
             <div style="overflow-y: auto; max-height: 400px; padding-right: 0.5rem;">
         `;
 
@@ -2176,6 +2177,138 @@ function getTopFourLabelHtml(entry, topFourKeys) {
     return topFourKeys.has(getEntryKey(entry))
         ? `<span class="top-four-score-tag">TOP 4 SCORE</span>`
         : '';
+}
+
+function getTournamentHistorySummary(playerName, tournamentName, entries) {
+    if (!entries || entries.length === 0) return '';
+
+    const places = entries.map(entry => parsePlace(entry.Place)).filter(Number.isFinite);
+    const points = entries.map(entry => Number(entry['PC Points']) || 0);
+    const averagePoints = points.reduce((sum, value) => sum + value, 0) / points.length;
+    const totalPoints = points.reduce((sum, value) => sum + value, 0);
+    const bestPlace = places.length > 0 ? Math.min(...places) : null;
+    const podiums = places.filter(place => place <= 3).length;
+    const wins = places.filter(place => place === 1).length;
+    const bestPoints = Math.max(...points);
+    const latestPoints = points[0];
+    const oldestPoints = points[points.length - 1];
+    const trend = latestPoints > oldestPoints ? 'up' : latestPoints < oldestPoints ? 'down' : 'flat';
+    const tournament = tournamentName.toUpperCase();
+
+    const themes = {
+        'GOLF': {
+            icon: '⛳',
+            hype: [
+                `${playerName} has turned this fairway into a personal highlight reel: ${podiums} podium${podiums === 1 ? '' : 's'}, a best finish of ${bestPlace}${wins > 0 ? `, and ${wins} win${wins === 1 ? '' : 's'}` : ''}. The shanks have officially been placed on notice—${averagePoints.toFixed(1)} Cup points per round is serious clubhouse energy.`,
+                `The golf history says ${playerName} is not here to admire the landscaping. A ${bestPlace} best finish and ${averagePoints.toFixed(1)} average points means the bogey man is working overtime while everyone else is still looking for their ball.`,
+                `${playerName} has been striping results down the middle of the fairway: ${totalPoints.toFixed(1)} total Cup points across ${entries.length} start${entries.length === 1 ? '' : 's'}. That is less “casual weekend golfer” and more “please stop asking me what club I used.”`
+            ],
+            roast: [
+                `${playerName} has entered ${entries.length} golf tournament${entries.length === 1 ? '' : 's'} and appears to be conducting a long-term study on how far a ball can travel sideways. A ${bestPlace ?? 'mysterious'} best finish and ${averagePoints.toFixed(1)} average points is less leaderboard pressure and more volunteer cart-driver energy.`,
+                `The golf résumé is giving “four hours, eighteen holes, zero witnesses.” With ${averagePoints.toFixed(1)} points per outing and ${totalPoints.toFixed(1)} total, ${playerName} is bravely proving that every round can be a new adventure in creative scoring.`,
+                `${playerName} has battled the course ${entries.length} time${entries.length === 1 ? '' : 's'} and the course remains undefeated. The clubs are innocent, the bogeys are numerous, and the scorecard has requested witness protection.`
+            ],
+            middle: [
+                `${playerName} is living in the wild middle of the fairway: ${averagePoints.toFixed(1)} points per start, with a best finish of ${bestPlace ?? 'N/A'}. There is real upside here—just fewer scenic shanks and this becomes a leaderboard problem.`,
+                `A ${bestPlace ?? 'respectable'} best finish and ${totalPoints.toFixed(1)} total Cup points show that ${playerName} can absolutely make noise on the course. The next step is simple: keep the drives straight and stop donating strokes to the wetlands.`
+            ]
+        },
+        'BOCCE': {
+            icon: '🎯',
+            hype: [
+                `${playerName} has been dropping bocce balls like guided missiles: ${podiums} podium${podiums === 1 ? '' : 's'} and a best finish of ${bestPlace}. With ${averagePoints.toFixed(1)} points per appearance, the pallino is basically filing a restraining order.`,
+                `This is not bocce; this is precision theater starring ${playerName}. ${totalPoints.toFixed(1)} career Cup points and ${podiums} top-three finish${podiums === 1 ? '' : 'es'} have turned the court into a danger zone for anyone standing near the target.`
+            ],
+            roast: [
+                `${playerName} has approached the bocce court with confidence, mystery, and apparently no agreement with the target ball. ${averagePoints.toFixed(1)} points per entry means the pallino has spent more time safe than threatened.`,
+                `The bocce balls are round, the court is level, and yet ${playerName} keeps finding new ways to make geometry personal. A ${bestPlace ?? 'chaotic'} best finish leaves plenty of room for a comeback tour.`
+            ],
+            middle: [
+                `${playerName} is hovering just outside bocce royalty with ${averagePoints.toFixed(1)} points per entry and a best finish of ${bestPlace ?? 'N/A'}. One cleaner approach shot and the pallino starts sweating.`,
+                `The bocce record is respectable, if occasionally allergic to the podium. ${totalPoints.toFixed(1)} total Cup points says ${playerName} has the touch—now the final roll needs to stop auditioning for a blooper reel.`
+            ]
+        },
+        'BEANBAG': {
+            icon: '🫘',
+            hype: [
+                `${playerName} has turned the beanbag board into a bullseye factory: ${podiums} podium${podiums === 1 ? '' : 's'} and a best finish of ${bestPlace}. ${averagePoints.toFixed(1)} points per entry is the kind of aim that makes the hole look nervous.`,
+                `The bags are flying, the board is terrified, and ${playerName} keeps collecting receipts. ${totalPoints.toFixed(1)} total points with ${podiums} top-three finish${podiums === 1 ? '' : 'es'} is elite backyard warfare.`
+            ],
+            roast: [
+                `${playerName} has treated the beanbag board like it owes them money—and the board keeps winning. With ${averagePoints.toFixed(1)} points per entry, the bags are landing everywhere except the one place with a hole.`,
+                `The beanbags have been given several opportunities to make history, but ${playerName} keeps sending them on sightseeing tours. A ${bestPlace ?? 'mysterious'} best finish means the comeback story is still available.`
+            ],
+            middle: [
+                `${playerName} is one hot streak away from becoming a beanbag menace. A ${bestPlace ?? 'solid'} best finish and ${averagePoints.toFixed(1)} average points show the aim is in there somewhere—probably hiding behind the scoreboard.`,
+                `The board has seen flashes of brilliance from ${playerName}, mixed with a few bags that clearly had other plans. ${totalPoints.toFixed(1)} total Cup points is a sturdy launchpad for the next toss.`
+            ]
+        },
+        'CRIBBAGE': {
+            icon: '🃏',
+            hype: [
+                `${playerName} has been pegging with the cold efficiency of a calculator wearing sunglasses: ${podiums} podium${podiums === 1 ? '' : 's'} and a best finish of ${bestPlace}. ${averagePoints.toFixed(1)} points per entry says the crib is not the only thing getting stuffed.`,
+                `The cards keep arriving, and ${playerName} keeps turning them into leaderboard damage. ${totalPoints.toFixed(1)} total Cup points and ${podiums} top-three finish${podiums === 1 ? '' : 'es'} is a very rude way to invite people to game night.`
+            ],
+            roast: [
+                `${playerName} has looked at the cribbage board ${entries.length} time${entries.length === 1 ? '' : 's'} and apparently decided counting is optional. At ${averagePoints.toFixed(1)} points per entry, the pegs are moving slower than a bad hand explained for the third time.`,
+                `The cards were shuffled, the board was ready, and then ${playerName} brought pure mathematical turbulence. ${totalPoints.toFixed(1)} total points is less a campaign and more an extended negotiation with the skunk line.`
+            ],
+            middle: [
+                `${playerName} is showing flashes of cribbage menace, but the pegs are still filing a few complaints. A ${bestPlace ?? 'respectable'} best finish and ${averagePoints.toFixed(1)} average points leave plenty of room for a legendary hand.`,
+                `The cribbage record is a beautiful mix of good counting and suspicious optimism. ${totalPoints.toFixed(1)} total Cup points says ${playerName} can absolutely make a run—if the next hand stops looking like a dare.`
+            ]
+        },
+        'KUBB': {
+            icon: '🪵',
+            hype: [
+                `${playerName} has been launching wooden missiles with villainous accuracy: ${podiums} podium${podiums === 1 ? '' : 's'} and a best finish of ${bestPlace}. The kubbs are down, the king is sweating, and ${averagePoints.toFixed(1)} points per entry is pure Viking nonsense—in the best way.`,
+                `This Kubb résumé says ${playerName} did not come to gently rearrange lawn furniture. ${totalPoints.toFixed(1)} total Cup points and a ${bestPlace ?? 'strong'} best finish make the battlefield look suspiciously like a highlight reel.`
+            ],
+            roast: [
+                `${playerName} has thrown enough Kubb sticks to qualify as a small lumber operation, yet the kubbs remain emotionally unharmed. ${averagePoints.toFixed(1)} points per entry is a bold commitment to attacking the grass.`,
+                `The king is standing, the kubbs are relaxed, and ${playerName} is out here turning every throw into a Nordic blooper. The good news: even Vikings get a rematch.`
+            ],
+            middle: [
+                `${playerName} has the makings of a Kubb threat, assuming the sticks continue traveling toward the actual wood. A ${bestPlace ?? 'solid'} best finish and ${averagePoints.toFixed(1)} average points show the axe-thrower energy is close.`,
+                `The Kubb record is part precision, part lumber-based improvisation. ${totalPoints.toFixed(1)} total Cup points means ${playerName} is dangerous enough to watch—and unpredictable enough to keep the king insured.`
+            ]
+        }
+    };
+
+    const fallback = {
+        icon: '🏆',
+        hype: [
+            `${playerName} has built a serious ${formatTournamentName(tournamentName)} résumé: ${podiums} podium${podiums === 1 ? '' : 's'} and a best finish of ${bestPlace ?? 'N/A'}. ${averagePoints.toFixed(1)} points per entry is not participation—that is a warning label.`,
+            `${totalPoints.toFixed(1)} total Cup points across ${entries.length} start${entries.length === 1 ? '' : 's'} makes ${playerName} a certified problem in ${formatTournamentName(tournamentName)}. The leaderboard has seen the tape and is already making adjustments.`
+        ],
+        roast: [
+            `${playerName} has entered ${formatTournamentName(tournamentName)} ${entries.length} time${entries.length === 1 ? '' : 's'} and is bravely refusing to let the scoreboard define them. At ${averagePoints.toFixed(1)} points per entry, the comeback arc has excellent material.`,
+            `The ${formatTournamentName(tournamentName)} record is a collection of plot twists, questionable decisions, and ${totalPoints.toFixed(1)} total Cup points. ${playerName} may not own the leaderboard yet, but they are definitely keeping it entertained.`
+        ],
+        middle: [
+            `${playerName} is living in the competitive middle of ${formatTournamentName(tournamentName)}: a ${bestPlace ?? 'respectable'} best finish and ${averagePoints.toFixed(1)} points per entry. The ceiling is high; the consistency is currently on vacation.`,
+            `${totalPoints.toFixed(1)} total Cup points shows ${playerName} belongs in the fight. A little more ${trend === 'up' ? 'of this upward momentum' : 'killer instinct'} and this history gets a lot louder.`
+        ]
+    };
+
+    const theme = themes[tournament] || fallback;
+    const tone = averagePoints >= 13 || podiums >= Math.max(2, Math.ceil(entries.length / 2))
+        ? 'hype'
+        : averagePoints <= 4.5
+            ? 'roast'
+            : 'middle';
+    const choices = theme[tone];
+    const seed = [...String(playerName), ...tournament].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const first = choices[seed % choices.length];
+    const second = choices[(seed + entries.length + Math.round(bestPoints * 10)) % choices.length];
+    const summary = first === second ? first : `${first} ${second}`;
+
+    return `
+        <div class="history-summary history-summary-${tone}" role="note">
+            <div class="history-summary-kicker">${theme.icon} Scouting report</div>
+            <p>${summary}</p>
+        </div>
+    `;
 }
 
 // Current-season view: only event sheets with a real player row are included.

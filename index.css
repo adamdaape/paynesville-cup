@@ -1680,6 +1680,57 @@ body {
     color: var(--accent-cyan);
 }
 
+.history-summary {
+    position: relative;
+    overflow: hidden;
+    margin: 0 0 1.25rem;
+    padding: 0.9rem 1rem 0.95rem;
+    border: 1px solid hsla(180, 100%, 48%, 0.2);
+    border-left: 3px solid var(--accent-cyan);
+    border-radius: 10px;
+    background: linear-gradient(135deg, hsla(180, 100%, 48%, 0.08), hsla(225, 20%, 8%, 0.72));
+}
+
+.history-summary::after {
+    content: '✦';
+    position: absolute;
+    right: 0.9rem;
+    top: 0.5rem;
+    color: hsla(180, 100%, 48%, 0.22);
+    font-size: 2rem;
+    transform: rotate(18deg);
+}
+
+.history-summary-roast {
+    border-left-color: #ff5c7a;
+    border-color: hsla(345, 100%, 68%, 0.26);
+    background: linear-gradient(135deg, hsla(345, 100%, 68%, 0.1), hsla(225, 20%, 8%, 0.72));
+}
+
+.history-summary-hype {
+    border-left-color: var(--accent-gold);
+    border-color: hsla(45, 100%, 55%, 0.28);
+    background: linear-gradient(135deg, hsla(45, 100%, 55%, 0.1), hsla(225, 20%, 8%, 0.72));
+}
+
+.history-summary-kicker {
+    margin-bottom: 0.35rem;
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.history-summary p {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
 .medal-year-block {
     background-color: var(--bg-sidebar);
     border: 1px solid var(--border-color);
