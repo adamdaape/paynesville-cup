@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.18.4';
+const APP_VERSION = '2026.7.18.6';
 const CURRENT_SEASON_YEAR = 2026;
 
 // Google Sheets Live Data Configuration
