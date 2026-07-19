@@ -12,6 +12,7 @@ let currentTab = 'yearly';
 let selectedYear = 2026; // Default to the active 2026 season
 let selectedTournament = '3-CLUB CHALLENGE';
 let searchQuery = '';
+let facebookRecapVariant = 0;
 
 // Rivalry selections
 let rivalryPlayerA = '';
@@ -527,7 +528,6 @@ function populateMetadata() {
         });
     }
     
-    generateFacebookRecap();
 }
 
 // Switch dashboard tabs
@@ -563,6 +563,10 @@ function switchTab(tabName) {
     // Toggle check-in widget & default widgets
     const defaultWidgets = document.getElementById('default-widgets');
     const checkinWidget = document.getElementById('checkin-widget-container');
+    const facebookWidget = document.getElementById('facebook-widget-card');
+    if (facebookWidget) {
+        facebookWidget.style.display = tabName === 'yearly' ? '' : 'none';
+    }
     if (tabName === 'tournaments') {
         if (defaultWidgets) defaultWidgets.style.display = 'none';
         if (checkinWidget) {
@@ -1613,7 +1617,6 @@ function handleRivalChange(target, value) {
         rivalryPlayerB = value;
     }
     renderRivalryComparison();
-    generateFacebookRecap();
 }
 
 // ----------------- SEARCH & FILTER LOGIC -----------------
@@ -1635,26 +1638,104 @@ function handleSearch() {
 }
 
 // ----------------- FACEBOOK STATUS GENERATOR -----------------
-function generateFacebookRecap() {
+function getOrdinalLabel(number) {
+    const remainder = number % 100;
+    if (remainder >= 11 && remainder <= 13) return `${number}th`;
+    switch (number % 10) {
+        case 1: return `${number}st`;
+        case 2: return `${number}nd`;
+        case 3: return `${number}rd`;
+        default: return `${number}th`;
+    }
+}
+
+function getCurrentYearFacebookStandings() {
+    return cupData.yearly
+        .filter(player => player.Year === selectedYear)
+        .filter(player => Number(player['Tournaments Entered']) > 0 || Number(player['Cup Points']) > 0)
+        .sort((a, b) => {
+            const pointsDifference = Number(b['Cup Points']) - Number(a['Cup Points']);
+            return pointsDifference || a.Name.localeCompare(b.Name);
+        });
+}
+
+function getLatestUpdatedTournament(year) {
+    const entriesByTournament = new Map();
+    cupData.granular
+        .filter(entry => entry.Year === year && isValidPlayer(entry['Player Name']))
+        .forEach(entry => {
+            const tournament = entry.Tournament;
+            if (!entriesByTournament.has(tournament)) entriesByTournament.set(tournament, []);
+            entriesByTournament.get(tournament).push(entry);
+        });
+
+    const tournaments = [...entriesByTournament.entries()].map(([tournament, entries]) => {
+        const timestamps = entries
+            .map(entry => entry.EventDate ? Date.parse(entry.EventDate) : NaN)
+            .filter(Number.isFinite);
+        return {
+            tournament,
+            entries,
+            latestDate: timestamps.length ? Math.max(...timestamps) : 0,
+            eventOrder: Math.max(...entries.map(entry => entry.EventOrder ?? -1))
+        };
+    });
+
+    tournaments.sort((a, b) => (b.latestDate - a.latestDate) || (b.eventOrder - a.eventOrder));
+    return tournaments[0] || null;
+}
+
+async function generateFacebookRecap() {
     if (!cupData) return;
-    
-    const quotes = [
-        "Adam Murphy is still leading the pack with Pickleball dominance! Max Murphy has a NEGATIVE Cribbage average. Yes, negative! Maximum effort, right?",
-        "Standings are heating up! Defending champ Ben Aeshliman has a 10.3% repeat chance, but Kevin Horner is leading the simulation board at 15.0%! Zach Leahy currently holds a beautiful ZERO average in Euchre. Truly an artist.",
-        "Rivalry Watch! We simulated Adam Murphy vs. Zach Leahy. Adam holds a brutal 3-0 record on the Bocce courts, but Zach holds a 25.0 perfect score in Golf Cards! Tragic.",
-        "Recap Alert! Jason Lindseth remains the pound-for-pound efficiency king at 11.6 pts/entry. Donna Weineke's 18.5 points in 2024 have officially been restored. Boom! Standings updated."
-    ];
-    
-    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-    
-    const text = `📢 PAYNESVILLE CUP LIVE STANDINGS UPDATE! 
 
-${randomQuote}
+    const textarea = document.getElementById('fb-recap-text');
+    const generateButton = document.getElementById('btn-generate-fb');
+    if (!textarea || !generateButton) return;
 
-Follow along with the live stands, bubble watch calculators, and cousin rivalries on our Paynesville Cup dashboard!
-🔗 http://paynesvillecup.com`;
-    
-    document.getElementById('fb-recap-text').value = text;
+    const originalButtonText = generateButton.textContent;
+    generateButton.disabled = true;
+    generateButton.textContent = '⏳ Refreshing live standings...';
+
+    try {
+        // Ensure the generator sees the same current-year event updates as the
+        // yearly table, including a completed event that awarded zero points.
+        if (selectedYear === CURRENT_SEASON_YEAR) {
+            await ensureAll2026EventMoneyDataLoaded();
+        }
+
+        const standings = getCurrentYearFacebookStandings();
+        if (standings.length === 0) {
+            textarea.value = `📢 PAYNESVILLE CUP STANDINGS UPDATE\n\nThe ${selectedYear} Cup is ready for its first official standings update. Check back after the first tournament results are entered!\n\nFollow the live updates on our Paynesville Cup app:\n🔗 http://paynesvillecup.com`;
+            return;
+        }
+
+        const cutoffPoints = Number(standings[Math.min(4, standings.length - 1)]['Cup Points']);
+        const topPlayers = standings.filter((player, index) => index < 5 || Number(player['Cup Points']) === cutoffPoints);
+        const latestTournament = getLatestUpdatedTournament(selectedYear);
+        const latestTournamentName = latestTournament ? formatTournamentName(latestTournament.tournament) : null;
+        const updateLines = topPlayers.map((player, index) => {
+            const previousPoints = index > 0 ? Number(topPlayers[index - 1]['Cup Points']) : null;
+            const rank = previousPoints !== null && Number(player['Cup Points']) === previousPoints ? topPlayers[index - 1].__rank : index + 1;
+            player.__rank = rank;
+            return `${getOrdinalLabel(rank)} - ${player.Name} (${Number(player['Cup Points']).toFixed(1)} Cup Points)`;
+        });
+
+        const leadIns = latestTournamentName
+            ? [
+                `The latest results are in from ${latestTournamentName}, and the race is already getting spicy.`,
+                `${latestTournamentName} is officially in the books, which means the leaderboard has new numbers and fresh opportunities for trash talk.`,
+                `After ${latestTournamentName}, the Cup standings have been updated and nobody gets to hide from the scoreboard.`
+            ]
+            : [`The ${selectedYear} Cup standings are taking shape and the early leaders have emerged.`];
+        const leadIn = leadIns[facebookRecapVariant % leadIns.length];
+        facebookRecapVariant += 1;
+        const topLabel = topPlayers.length === 1 ? 'Our current leader is...' : `Our current top ${topPlayers.length} is...`;
+
+        textarea.value = `🏆 PAYNESVILLE CUP STANDINGS UPDATE\n\n${leadIn}\n\n${topLabel}\n${updateLines.join('\n')}\n\nFollow the live updates on our Paynesville Cup app and see the full standings for yourself:\n🔗 http://paynesvillecup.com`;
+    } finally {
+        generateButton.disabled = false;
+        generateButton.textContent = originalButtonText;
+    }
 }
 
 // Copy facebook recaps to clipboard

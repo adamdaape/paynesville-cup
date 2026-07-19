@@ -86,16 +86,9 @@
                                 <h3>📱 Facebook Updates Generator</h3>
                             </div>
                             <div class="widget-body">
-                                <p>Generate a styled, trash-talk-ready recaps with actual live stats and standings to post on Facebook!</p>
-                                <textarea class="fb-textarea" id="fb-recap-text" readonly>
-📢 PAYNESVILLE CUP DAY RECAP!
-
-Standings are updating live on the Paynesville Cup Dashboard! 
-Adam Murphy is still leading the pack with Pickleball dominance (+1231 odds!). 
-
-Read the live leaderboards, bubble watches, and matchups here: 
-🔗 http://paynesvillecup.com
-                                </textarea>
+                                <p>Generate a clean, editable standings update after each completed tournament. Tweak the wording, then copy it straight to Facebook.</p>
+                                <textarea class="fb-textarea" id="fb-recap-text" aria-label="Editable Facebook standings update" placeholder="Click Generate Response to build the latest standings update..."></textarea>
+                                <button class="action-btn generate-btn" id="btn-generate-fb" onclick="generateFacebookRecap()">✨ Generate Response</button>
                                 <button class="action-btn copy-btn" id="btn-copy-fb" onclick="copyRecapToClipboard()">📋 Copy Status to Clipboard</button>
                             </div>
                         </article>
