@@ -902,7 +902,7 @@ body {
     /* Medal card modal also full-screen */
     .player-card.medal-card {
         min-height: unset;
-        max-height: 80vh;
+        max-height: 92vh;
     }
 
     /* ----- Rivalry screen: stack vertically ----- */
@@ -1168,6 +1168,10 @@ body {
     gap: 1.5rem;
     overflow-y: auto;
     padding-right: 0.5rem;
+}
+
+.medal-card .card-inner {
+    min-height: 0;
 }
 
 /* Premium scrollbar for card inner */
@@ -1682,7 +1686,7 @@ body {
 
 .history-summary {
     position: relative;
-    overflow: hidden;
+    flex: 0 0 auto;
     margin: 0 0 1.25rem;
     padding: 0.9rem 1rem 0.95rem;
     border: 1px solid hsla(180, 100%, 48%, 0.2);
@@ -1729,6 +1733,12 @@ body {
     color: var(--text-primary);
     font-size: 0.84rem;
     line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.history-entries-list {
+    flex: 0 0 auto;
+    padding-right: 0.5rem;
 }
 
 .medal-year-block {

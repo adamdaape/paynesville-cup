@@ -1,5 +1,5 @@
 // 📊 Paynesville Cup Frontend Application Logic
-const APP_VERSION = '2026.7.18.3';
+const APP_VERSION = '2026.7.18.4';
 const CURRENT_SEASON_YEAR = 2026;
 
 // Google Sheets Live Data Configuration
@@ -1988,7 +1988,7 @@ function showTournamentHistory(playerName, tournamentName) {
                 <div class="medal-details-subtitle">${prettyTournament} History</div>
             </div>
             ${getTournamentHistorySummary(playerName, tournamentName, entries)}
-            <div style="overflow-y: auto; max-height: 400px; padding-right: 0.5rem;">
+            <div class="history-entries-list">
         `;
 
         if (entries.length === 0) {
